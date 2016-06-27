@@ -23,3 +23,9 @@ A tool to reverse complement the entries of FASTA format files.
 ### [fasta_length](bin/fasta_length)
 
 A tool to get sequence length information for FASTA files
+
+------------------------------------
+### [fasta_similarity](bin/fasta_similarity)
+
+A tool to measure sequence similarity of aligned sequences in multi
+FASTA format files.

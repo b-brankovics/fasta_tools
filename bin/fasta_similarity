@@ -1,0 +1,130 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to measure sequence similarity of aligned sequences in multi FASTA format files
+
+my $description = 
+    "Description:\n\tA tool to measure sequence similarity of aligned sequences in multi FASTA format files\n";
+my $usage = 
+    "Usage:\n\t$0 [-h | --help] [FASTA file | -]\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\n";
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# Print help if needed
+&print_help(@ARGV);
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+
+# Output: 
+
+print &get_similarity(\%fas_data, \@ids);
+
+
+#===============Subroutines=================================================
+sub get_similarity {
+    # Calculates the similarity of aligned sequences
+    # Inputs:
+    #         hash reference for the FASTA data
+    #         array reference for the IDs in the FASTA data
+    # Output:
+    #         number of identical bases, percentage, number of identical bases(non "-"), corresponding percentage
+    my ($hash, $array) = @_;
+    # Store the length of the alignments
+    my $length = length($hash->{$array->[0]});
+    
+    # Aligned sequences should have identical lengths
+    die "ERROR: Not all the sequences have the same length! The sequences are not aligned.\n" if grep{length($hash->{$_}) != $length} @$array;
+    
+    # Compare the sequences per position
+    my $score = 0;
+    for my $pos (0..($length - 1)) {
+	my $base;
+	my $diff;
+	for my $id (@{$array}) {
+	    if ($base) {
+		$diff++ if $base ne substr($hash->{$id}, $pos, 1);
+		last if $diff;
+	    } else {
+		$base = substr($hash->{$id}, $pos, 1);
+	    }
+	}
+	$score++ unless $diff;
+    }
+    my $percent = ($score / $length) * 100;
+    return "$length\t$score\t$percent\%\n";
+}
+
+sub print_help {
+    # Print out the usage to STDERR
+    # Takes in the @ARGV as input
+    my @args = @_;
+    for (@args) {
+	if (/-?-h(elp)?/) {
+	    die "$usage\n$description\n$options";
+	}
+    }
+}
+
+sub read_fasta {
+    # Convert FASTA string into a hash with IDs for keys and sequences
+    #  as values and stores the original order in an array
+    # This subroutine requires three arguments:
+	#	1) filehandle for the FASTA file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same
+	#          order as the original file 
+    # If an ID line is present multiple times then a warning is printed
+    #  to STDERR
+    my ($hash, $list, $file) = @_;
+    # Use STDIN if file is '-'
+    $file = undef if $file && $file eq '-';
+    my $in;
+    if ($file && -e $file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    # Store the sequence id
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print {*STDERR} "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error in FASTA file! Check the file!\n";
+		last;
+	    }
+	    # Remove line endings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
