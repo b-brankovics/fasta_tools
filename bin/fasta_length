@@ -2,23 +2,47 @@
 use strict;
 
 #===DESCRIPTION=================================================================
-# A tool to reverse complement the entries of FASTA format files
+# A tool to get sequence length information for FASTA files
 
-my $description = "Description:\n\tA tool to reverse complement the entries of FASTA format files\n";
-my $usage = "Usage:\n\t$0 [-h | --help] [FASTA file | -]\n";
+my $description = 
+    "Description:\n\tA tool to get sequence length information for FASTA files\n";
+my $usage = 
+    "Usage:\n\t$0 [Options] [FASTA file | -]\n";
 my $options = 
     "Options:\n" .
     "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\t-e\n\t\tPrint the sequence length for each entry and the total length.\n" .
+    "\t-o\n\t\tPrint the sequence length for each entry.\n" .
     "\n";
 #===MAIN========================================================================
+
+# Print help if needed
+&print_help(@ARGV);
+
+# Process the arguments
+#   Check whether individual length are needed or not "-e"
+#   Check whether only individual length is needed "-o"
+my $do_each;
+my $no_total;
+my @temp;
+for (@ARGV) {
+    if ($_ eq "-e") {
+        $do_each++
+    } elsif ($_ eq "-o"){
+        $do_each++;
+        $no_total++;
+    } else {
+        push @temp, $_
+    }
+}
+# If one is selected then do_each is true
+#   Remove these from the file list
+@ARGV = @temp if $do_each;
 
 # Hash to store the sequences: key (id and defintion) and value (sequence) 
 my %fas_data;
 # Array to store the order of the sequences
 my @ids;
-
-# Print help if needed
-&print_help(@ARGV);
 
 # If there were arguments specified then read the sequence from them
 # OR read from STDIN
@@ -30,11 +54,20 @@ if (@ARGV) {
     &read_fasta(\%fas_data, \@ids);
 }
 
-# Reverse complement the sequences
-&reverse_fasta(\%fas_data, \@ids);
+# Print the length to STDOUT according to the mode selected
 
-# Print the sequences to STDOUT
 &print_fasta(\%fas_data, \@ids);
+
+# Get the lengths
+#   Array to store the sequences lengths
+my $total;
+for (@ids) {
+    my $len = length $fas_data{$_};
+    $total += $len;
+    print ">$_\n$len\n" if $do_each;
+}
+print "$total\n" unless $no_total;
+
 
 
 #===SUBROUTINES=================================================================
@@ -94,40 +127,4 @@ sub read_fasta {
 	}
     }
     close $in;
-}
-
-sub to_fasta {
-    # Return a fasta formated string
-    my ($seq_name, $seq, $len) = @_;
-    # default to 60 characters of sequence per line
-    $len = 60 unless $len;
-    # Print ID line
-    my $formatted_seq = ">$seq_name\n";
-    # Add sequence lines with $len length
-    while (my $chunk = substr($seq, 0, $len, "")) {
-	$formatted_seq .= "$chunk\n";
-    }
-    return $formatted_seq;
-}
-
-sub print_fasta {
-    # Print all the sequences to STDOUT in FASTA format
-    my ($hash, $list) = @_;
-    for (@$list) {
-	print &to_fasta($_, $hash->{$_});
-    }
-}
-
-sub reverse_fasta {
-    # Reverse complements the sequences for each entry in the hash
-    # There is no return for this subroutine
-    #   The sequence is manipulated within the hash itself
-    my ($hash, $list) = @_;
-    for (@$list) {
-	# Reverse the sequnce
-	my $complement = reverse $hash->{$_};
-	# Complement the sequence
-	$complement =~ tr/ACGTacgtWwMmRrSsKkYyBbVvDdHh/TGCAtgcaWwKkYySsMmRrVvBbHhDd/;
-	$hash->{$_} = $complement;
-    }
 }

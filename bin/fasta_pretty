@@ -4,9 +4,14 @@ use strict;
 #===DESCRIPTION=================================================================
 # A tool to format FASTA files to uniform column width (60)
 
-my $description = "Description:\n\tA tool to format fasta files to uniform column width (60)\n";
-my $usage = "Usage:\n\t$0 [-h|--help] [FASTA file]\n";
-my $options = "Options:\n\t-h | --help\tPrint the help message; ignore other arguments.\n";
+my $description = 
+    "Description:\n\tA tool to format fasta files to uniform column width (60)\n";
+my $usage = 
+    "Usage:\n\t$0 [-h | --help] [FASTA file | -]\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\n";
 #===MAIN========================================================================
 
 # Hash to store the sequences: key (id and defintion) and value (sequence) 
