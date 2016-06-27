@@ -55,9 +55,6 @@ if (@ARGV) {
 }
 
 # Print the length to STDOUT according to the mode selected
-
-&print_fasta(\%fas_data, \@ids);
-
 # Get the lengths
 #   Array to store the sequences lengths
 my $total;

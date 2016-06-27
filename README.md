@@ -10,7 +10,6 @@ The executable files are located in the [bin](bin) folder.
 ------------------------------------
 ## Programs:
 
-------------------------------------
 ### [fasta_pretty](bin/fasta_pretty)
 
 A tool to format fasta files to uniform column width (60).
