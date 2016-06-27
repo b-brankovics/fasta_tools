@@ -1,0 +1,151 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to remove duplicate sequence from FASTA format files and
+#  print the groups to STDERR
+
+my $description = 
+    "Description:\n\t" .
+    "A tool to remove duplicate sequence from FASTA format files and\n" .
+    "\t print the groups to STDERR\n";
+my $usage = 
+    "Usage:\n\t$0 [-h | --help] [FASTA file | -]\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\n";
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# Print help if needed
+&print_help(@ARGV);
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+# Group entries based on sequences
+my %counts; # key: representative ID value: count
+my %seq2id; # key: sequence          value: representative ID
+my @unique; # representative IDs
+my %group;  # key: sequence          value: IDs separated by ','
+
+# Check uniqueness of the sequence
+for my $id (@ids) {
+    # Get the sequence
+    my $seq = $fas_data{$id};
+    # IF sequence already in the hash 
+    #   Then increase the count of the ID that is attached to it
+    #   Otherwise set count to 1, add sequence to the hash and keep the ID
+    if ($seq2id{$seq}) {
+	$counts{$seq2id{$seq}}++;
+	$group{$seq2id{$seq}} .= ",$id";
+    } else {
+	$counts{$id}++;
+	$seq2id{$seq} = $id;
+	push @unique, $id;
+	$group{$seq2id{$seq}} = $id;
+    }
+}
+
+# Print the sequences to STDOUT
+#  If more than one entry has the same sequence
+#  Then print representative ID and add "xINT" 
+#     INT: number of identical sequences
+# Print the grouping info to STDERR to be able to reconstruct the
+#  original file
+for my $id (@unique) {
+    my $c = $counts{$id};
+    my $def = $id;
+    if ($c > 1) {
+	$def .= "_x$c";
+    }
+    print &to_fasta($def, $fas_data{$id});
+    if ($c > 1) {
+	print {*STDERR} "$def\t$group{$id}\n";
+    }
+}
+
+#===SUBROUTINES=================================================================
+
+sub print_help {
+    # Print out the usage to STDERR
+    # Takes in the @ARGV as input
+    my @args = @_;
+    for (@args) {
+	if (/-?-h(elp)?/) {
+	    die "$usage\n$description\n$options";
+	}
+    }
+}
+
+sub read_fasta {
+    # Convert FASTA string into a hash with IDs for keys and sequences
+    #  as values and stores the original order in an array
+    # This subroutine requires three arguments:
+	#	1) filehandle for the FASTA file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same
+	#          order as the original file 
+    # If an ID line is present multiple times then a warning is printed
+    #  to STDERR
+    my ($hash, $list, $file) = @_;
+    # Use STDIN if file is '-'
+    $file = undef if $file && $file eq '-';
+    my $in;
+    if ($file && -e $file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    # Store the sequence id
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print {*STDERR} "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error in FASTA file! Check the file!\n";
+		last;
+	    }
+	    # Remove line endings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    # Print ID line
+    my $formatted_seq = ">$seq_name\n";
+    # Add sequence lines with $len length
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
