@@ -1,8 +1,58 @@
 #!/usr/bin/perl -w
 use strict;
 
+# POD: Plain Old Documentation block
+=pod
+
+=head3 fasta_pretty
+
+A tool to format FASTA files to uniform column width (60).
+
+=head4 Synopsis
+
+    fasta_pretty [OPTIONS] [FILE]...
+
+=head4 Options
+
+=over 12
+
+=item B<-h> | B<--help>
+
+Print the help message; ignore other arguments.
+
+=back
+
+=head4 Input
+
+STDIN and/or FASTA files.
+The extention of the files is irrelevant.
+
+=head4 Output
+
+The output is FASTA format with 60 line length for the sequence. 
+The program prints to STDOUT.
+This can be captured in a file by using the C<E<gt>> or C<E<gt>E<gt>> operator.
+
+=head4 Examples
+
+Format a single file (C<input.fas>) and save it to a file (C<output.fas>).
+
+    fasta_pretty input.fas >output.fas
+    cat input.fas | fasta_pretty >output.fas
+    cat input.fas | fasta_pretty - >output.fas
+
+Format and concatenate three FASTA files from the current directory
+(C<input1.fas>, C<input2.fas> and C<input3.fas>) and save it to a file (C<output.fas>).
+
+    fasta_pretty input1.fas input2.fas input3.fas >output.fas
+    fasta_pretty input*.fas >output.fas
+    cat input2.fas | fasta_pretty input1.fas - input3.fas >output.fas
+
+
+=cut
+
 #===DESCRIPTION=================================================================
-# A tool to format FASTA files to uniform column width (60)
+
 
 my $description = 
     "Description:\n\tA tool to format fasta files to uniform column width (60)\n";
@@ -34,10 +84,6 @@ if (@ARGV) {
 
 # Print the sequences to STDOUT
 &print_fasta(\%fas_data, \@ids);
-
-
-
-
 
 #===SUBROUTINES=================================================================
 

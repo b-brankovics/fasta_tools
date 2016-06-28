@@ -75,6 +75,8 @@ Example:
 
      fasta_deunique -i unique.fas -tab unique.tab >deunique.fas
 
+
+------------------------------------
 ### fasta\_pretty
 
 A tool to format FASTA files to uniform column width (60).
@@ -98,18 +100,18 @@ The extention of the files is irrelevant.
 
 The output is FASTA format with 60 line length for the sequence. 
 The program prints to STDOUT.
-This can be captured in a file by using the '>' or '>>' operator.
+This can be captured in a file by using the `>` or `>>` operator.
 
 #### Examples
 
-Format a single file (\`input.fas\`) and save it to a file (\`output.fas\`).
+Format a single file (`input.fas`) and save it to a file (`output.fas`).
 
     fasta_pretty input.fas >output.fas
     cat input.fas | fasta_pretty >output.fas
     cat input.fas | fasta_pretty - >output.fas
 
 Format and concatenate three FASTA files from the current directory
-(\`input1.fas\`, \`input2.fas\` and \`input3.fas\`) and save it to a file (\`output.fas\`).
+(`input1.fas`, `input2.fas` and `input3.fas`) and save it to a file (`output.fas`).
 
     fasta_pretty input1.fas input2.fas input3.fas >output.fas
     fasta_pretty input*.fas >output.fas
