@@ -54,6 +54,8 @@ for (@ARGV) {
     }
     $c++;
 }
+# Print warning if input and the reference are the same source
+die "ERROR: The reference and the input are the same!\n$usage" if $in eq $ref;
 
 # If there were arguments specified then read the sequence from them
 # OR read from STDIN
