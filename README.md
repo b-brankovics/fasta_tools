@@ -28,13 +28,13 @@ A tool to get sequence length information for FASTA files.
 ### [fasta_extract](bin/fasta_extract)
 
 A tool to extract selected entries from a multi FASTA file
-using regular expression(s) to identify entries
+using regular expression(s) to identify entries.
 
 ------------------------------------
 ### [fasta_remove](bin/fasta_remove)
 
 A tool to remove selected entries from a multi FASTA file
-using regular expression(s) to identify entries
+using regular expression(s) to identify entries.
 
 
 ------------------------------------
@@ -48,6 +48,17 @@ FASTA format files.
 
 A tool to measure sequence variability of aligned sequences in multi
 FASTA format files.
+
+------------------------------------
+### [fasta_sub](bin/fasta_sub)
+
+A tool to extract a part of the sequences from FASTA files.
+
+------------------------------------
+### [fasta_shift](bin/fasta_shift)
+
+A tool to shift circular FASTA sequences using 
+a reference FASTA file or a position.
 
 ------------------------------------
 ### [fasta_unique](bin/fasta_unique)

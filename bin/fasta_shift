@@ -1,0 +1,186 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to shift circular FASTA sequences using 
+#  a reference FASTA file or a position 
+
+my $description = 
+    "Description:\n" .
+    "\tA tool to shift circular FASTA sequences using\n" .
+    "\t a reference FASTA file or a position\n";
+my $usage = 
+    "Usage:\n\t$0 -i (FASTA file)|-  -r (FASTA file)|-\n" .
+    "\t$0 -i (FASTA file)|-  -p <int>\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\t-i | --input\n\t\tSpecifies the input file to be used. '-' if input is STDIN\n" .
+    "\t-r | --ref\n\t\tSpecifies the reference file to be used. '-' if input is STDIN\n" .
+    "\t-p | --pos\n\t\tSpecifies the position of the sequence which should be the new start position.\n" .
+    "\t\tThe position should be a positive integer. 1 is the start position of the original sequence.\n" .
+    "\n";
+#===MAIN========================================================================
+
+# Print help if needed
+&print_help(@ARGV);
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV != 4) {
+    die "ERROR: incorrect number of arguments:\n" . $usage;
+}
+
+# Parse the arguments
+my $ref; # reference file
+my $in;  # input fasta file
+my $pos; # position
+
+my $c=0;
+for (@ARGV) {
+    if (/^-?-i(nput)?$/) {
+	$in = $ARGV[$c+1];
+    } elsif (/^-?-r(ef)?$/) {
+	$ref = $ARGV[$c+1];
+    } elsif (/^-?-p(os)?$/) {
+	$pos = $ARGV[$c+1];
+	die "ERROR: position value has to be a positive integer!\n$usage" unless $pos =~ /^\d+$/;
+	die "ERROR: position value has to be a positive integer!\n$usage" unless $pos > 0;
+    }
+    $c++;
+}
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+&read_fasta(\%fas_data, \@ids, $in);
+
+# According to whether reference or position is specified, shift the sequence
+if ($ref) {
+    # Load the FASTA data for the reference
+    my %ref_data;
+    my @temp;
+    &read_fasta(\%ref_data, \@temp, $ref);
+    # Get the sequence from the reference
+    my $match = $ref_data{$temp[0]};
+    # Process all the sequences in the input
+    for (@ids) {
+	if ($fas_data{$_} =~ m/$match/) {
+	    $fas_data{$_} =~ m/$match/p;
+	    my $out = ${^MATCH} . ${^POSTMATCH} . ${^PREMATCH};
+	    print &to_fasta($_, $out);
+	} else {
+	    $fas_data{$_} = &reverse_seq($fas_data{$_});
+	    if ($fas_data{$_} =~ /$match/) {
+		$fas_data{$_} =~ m/$match/p;
+		my $out = ${^MATCH} . ${^POSTMATCH} . ${^PREMATCH};
+		print &to_fasta($_, $out);
+	    } else {
+		print STDERR "ERROR: The refernce did not match to $_\n";
+	    }
+	}
+    }
+} else {
+    # Process all the sequences in the input
+    for (@ids) {
+	my $end = substr $fas_data{$_}, 0, ($pos - 1);
+	my $start = substr $fas_data{$_}, ($pos - 1);
+	my $out = $start . $end;
+	print &to_fasta($_, $out);
+    }
+}
+
+#===SUBROUTINES=================================================================
+
+sub print_help {
+    # Print out the usage to STDERR
+    # Takes in the @ARGV as input
+    my @args = @_;
+    for (@args) {
+	if (/-?-h(elp)?/) {
+	    die "$usage\n$description\n$options";
+	}
+    }
+}
+
+sub read_fasta {
+    # Convert FASTA string into a hash with IDs for keys and sequences
+    #  as values and stores the original order in an array
+    # This subroutine requires three arguments:
+	#	1) filehandle for the FASTA file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same
+	#          order as the original file 
+    # If an ID line is present multiple times then a warning is printed
+    #  to STDERR
+    my ($hash, $list, $file) = @_;
+    # Use STDIN if file is '-'
+    $file = undef if $file && $file eq '-';
+    my $in;
+    if ($file && -e $file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    # Store the sequence id
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print {*STDERR} "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error in FASTA file! Check the file!\n";
+		last;
+	    }
+	    # Remove line endings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    # Print ID line
+    my $formatted_seq = ">$seq_name\n";
+    # Add sequence lines with $len length
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub print_fasta {
+    # Print all the sequences to STDOUT in FASTA format
+    my ($hash, $list) = @_;
+    for (@$list) {
+	print &to_fasta($_, $hash->{$_});
+    }
+}
+
+sub reverse_seq {
+    # Reverse complements the sequences
+    my ($seq) = @_;
+    # Reverse the sequnce
+    my $complement = reverse $seq;
+    # Complement the sequence
+    $complement =~ tr/ACGTacgtWwMmRrSsKkYyBbVvDdHh/TGCAtgcaWwKkYySsMmRrVvBbHhDd/;
+    return $complement;
+}
