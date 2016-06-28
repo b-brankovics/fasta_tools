@@ -25,6 +25,19 @@ A tool to reverse complement the entries of FASTA format files.
 A tool to get sequence length information for FASTA files.
 
 ------------------------------------
+### [fasta_extract](bin/fasta_extract)
+
+A tool to extract selected entries from a multi FASTA file
+using regular expression(s) to identify entries
+
+------------------------------------
+### [fasta_remove](bin/fasta_remove)
+
+A tool to remove selected entries from a multi FASTA file
+using regular expression(s) to identify entries
+
+
+------------------------------------
 ### [fasta_similarity](bin/fasta_similarity)
 
 A tool to measure sequence similarity of aligned sequences in multi
