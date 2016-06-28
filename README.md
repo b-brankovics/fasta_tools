@@ -10,11 +10,6 @@ The executable files are located in the [bin](bin) folder.
 ------------------------------------
 ## Programs:
 
-### [fasta_pretty](bin/fasta_pretty)
-
-A tool to format fasta files to uniform column width (60).
-
-------------------------------------
 ### [fasta_reversecomplement](bin/fasta_reversecomplement)
 
 A tool to reverse complement the entries of FASTA format files.
@@ -79,3 +74,45 @@ by fasta_unique. Using the produced fasta file and the names table.
 Example:
 
      fasta_deunique -i unique.fas -tab unique.tab >deunique.fas
+
+### fasta\_pretty
+
+A tool to format FASTA files to uniform column width (60).
+
+#### Synopsis
+
+    fasta_pretty [OPTIONS] [FILE]...
+
+#### Options
+
+- __\-h__ | __\--help__
+
+    Print the help message; ignore other arguments.
+
+#### Input
+
+STDIN and/or FASTA files.
+The extention of the files is irrelevant.
+
+#### Output
+
+The output is FASTA format with 60 line length for the sequence. 
+The program prints to STDOUT.
+This can be captured in a file by using the '>' or '>>' operator.
+
+#### Examples
+
+Format a single file (\`input.fas\`) and save it to a file (\`output.fas\`).
+
+    fasta_pretty input.fas >output.fas
+    cat input.fas | fasta_pretty >output.fas
+    cat input.fas | fasta_pretty - >output.fas
+
+Format and concatenate three FASTA files from the current directory
+(\`input1.fas\`, \`input2.fas\` and \`input3.fas\`) and save it to a file (\`output.fas\`).
+
+    fasta_pretty input1.fas input2.fas input3.fas >output.fas
+    fasta_pretty input*.fas >output.fas
+    cat input2.fas | fasta_pretty input1.fas - input3.fas >output.fas
+
+
