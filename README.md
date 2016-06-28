@@ -31,6 +31,12 @@ A tool to measure sequence similarity of aligned sequences in multi
 FASTA format files.
 
 ------------------------------------
+### [fasta_variability](bin/fasta_variability)
+
+A tool to measure sequence variability of aligned sequences in multi
+FASTA format files.
+
+------------------------------------
 ### [fasta_unique](bin/fasta_unique)
 
 A tool to remove duplicate sequence from FASTA format files and
