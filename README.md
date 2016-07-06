@@ -117,4 +117,49 @@ Format and concatenate three FASTA files from the current directory
     fasta_pretty input*.fas >output.fas
     cat input2.fas | fasta_pretty input1.fas - input3.fas >output.fas
 
+----------------------
+### fasta\_dealign
+
+A tool to format FASTA files to remove gap character states and format
+to uniform column width (60).
+
+#### Synopsis
+
+    fasta_dealign [OPTIONS] [FILE]...
+
+#### Options
+
+- __\-h__ | __\--help__
+
+    Print the help message; ignore other arguments.
+
+#### Input
+
+STDIN and/or FASTA files.
+The extention of the files is irrelevant.
+
+#### Output
+
+The output is FASTA format with 60 line length for the sequence.
+The program prints to STDOUT.
+This can be captured in a file by using the `>` or `>>` operator.
+
+#### Examples
+
+Format a single file (`input.fas`) and save it to a file
+(`output.fas`).
+
+    fasta_dealign input.fas >output.fas
+    cat input.fas | fasta_dealign >output.fas
+    cat input.fas | fasta_dealign - >output.fas
+
+Format and concatenate three FASTA files from the current directory
+(`input1.fas`, `input2.fas` and `input3.fas`) and save it to a file
+(`output.fas`).
+
+    fasta_dealign input1.fas input2.fas input3.fas >output.fas
+    fasta_dealign input*.fas >output.fas
+    cat input2.fas | fasta_dealign input1.fas - input3.fas >output.fas
+
+
 
