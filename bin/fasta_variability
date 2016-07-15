@@ -117,6 +117,8 @@ sub read_fasta {
     # Store the sequence id
     my $seq_id;
     for (<$in>) {
+        # Remove line endings
+        s/\R//g;
 	# Skip empty lines
 	next if /^\s*$/;
 	# Check wheter it is an id line
@@ -131,8 +133,7 @@ sub read_fasta {
 		print "Format error in FASTA file! Check the file!\n";
 		last;
 	    }
-	    # Remove line endings and white space
-	    s/\R//g;
+	    # Remove white space
 	    s/\s+//g;
 	    # Add to the sequence
 	    $hash->{$seq_id} .= $_;

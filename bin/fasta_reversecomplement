@@ -72,6 +72,8 @@ sub read_fasta {
     # Store the sequence id
     my $seq_id;
     for (<$in>) {
+        # Remove line endings
+        s/\R//g;
 	# Skip empty lines
 	next if /^\s*$/;
 	# Check wheter it is an id line
@@ -86,8 +88,7 @@ sub read_fasta {
 		print "Format error in FASTA file! Check the file!\n";
 		last;
 	    }
-	    # Remove line endings and white space
-	    s/\R//g;
+	    # Remove white space
 	    s/\s+//g;
 	    # Add to the sequence
 	    $hash->{$seq_id} .= $_;
@@ -118,16 +119,22 @@ sub print_fasta {
     }
 }
 
+sub reverse_seq {
+    # Reverse complements the sequences
+    my ($seq) = @_;
+    # Reverse the sequnce
+    my $complement = reverse $seq;
+    # Complement the sequence
+    $complement =~ tr/ACGTacgtWwMmRrSsKkYyBbVvDdHh/TGCAtgcaWwKkYySsMmRrVvBbHhDd/;
+    return $complement;
+}
+
 sub reverse_fasta {
     # Reverse complements the sequences for each entry in the hash
     # There is no return for this subroutine
     #   The sequence is manipulated within the hash itself
     my ($hash, $list) = @_;
     for (@$list) {
-	# Reverse the sequnce
-	my $complement = reverse $hash->{$_};
-	# Complement the sequence
-	$complement =~ tr/ACGTacgtWwMmRrSsKkYyBbVvDdHh/TGCAtgcaWwKkYySsMmRrVvBbHhDd/;
-	$hash->{$_} = $complement;
+	$hash->{$_} = &reverse_seq($hash->{$_});
     }
 }
