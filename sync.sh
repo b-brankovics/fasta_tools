@@ -5,7 +5,7 @@ else
     git commit -m "$1"
     git push
     git checkout master
-    git checkout dev README.md
+    git checkout dev README.md LICENSE bin/
     git commit -m "$1"
     git push
     git checkout dev
