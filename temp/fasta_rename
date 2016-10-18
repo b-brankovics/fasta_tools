@@ -1,0 +1,127 @@
+#!/usr/bin/perl -w
+use strict;
+use Data::Dumper;
+
+#===DESCRIPTION=================================================================
+# A tool to replace the old sequence names with new ones based on a
+# tab delimited file
+
+#===MAIN========================================================================
+my $list;
+my $in;
+my $mode;
+
+if (@ARGV < 4 || @ARGV > 5) {
+    die "ERROR: not enough arguments:\n" .
+	"USAGE:\n" .
+	"\t$0 -i input.fas|-  -tab names.tab (-k)\n";
+}
+
+my $c=0;
+for (@ARGV) {
+    if (/-tab/) {$list = $ARGV[$c+1]}
+    if (/-i/) {$in = $ARGV[$c+1]}
+    if (/-k/) {$mode++}
+    $c++;
+}
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+$in = undef if $in eq "-";
+&read_fasta(\%fas_data, \@ids, $in);
+
+# Read the renaming table
+my %change; # oldname -> newname
+my %check;  # check if all the names were found
+open(my $tabread, '<', $list);
+for (<$tabread>) {
+    next if /^\S*$/;
+    s/\R//g;
+    # First column is old name and second column is new name
+    my ($old, $new) = split /\t/;
+    $change{$old} = $new;
+}
+close $tabread;
+
+#print Dumper(\%change);#exit;
+#print Dumper(\%fas_data);exit;
+
+for my $id (@ids) {
+    my $found;
+    my $seq = $fas_data{$id};
+    # Try to find a match
+    for my $find (sort keys %change) {
+#	print "$find\t$id\t";	if ($id =~ /$find/) {print "yes\n"} else {print "no\n"}
+	# If found then change the name and skip the rest of the old names for this one
+	if ($id =~ /$find/) {
+	    $check{$find}++;
+	    $id =~ s/$find/$change{$find}/;
+	    $found++;
+	}
+	last if $found;
+    }
+    # Print sequence if it was matched or if we keep all
+    if ($found || $mode) {
+	print &to_fasta($id, $seq);
+    }
+    unless ($found) {
+	print {*STDERR} "The following line did not match: $id\n";
+	print {*STDERR} "\tThe entry was not printed to the output\n" unless $mode;
+    }
+}
+for (sort keys %change) {
+    print {*STDERR} "No entry found with '$_'\n" unless $check{$_};
+}
+
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}

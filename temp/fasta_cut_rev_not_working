@@ -1,0 +1,84 @@
+#!/usr/bin/perl -w
+
+# A tool for extracting sequence records from a fasta file
+
+#================================================================
+# Format fasta output string
+sub to_fasta {
+        my ($seq_name, $seq, $len) = @_;
+
+	# default to 80 characters of sequence per line
+        $len = 60 unless $len;
+
+        my $formatted_seq = ">$seq_name\n";
+        while (my $chunk = substr($seq, 0, $len, "")) {
+                $formatted_seq .= "$chunk\n";
+        }
+        
+        return $formatted_seq;
+}
+#======================INPUT==========================================
+# Read input data
+# Creates an array for storing fasta: id (key) to sequence (value)
+my %fas_data;
+my @ids;
+# Check if a fasta file is given as an argument if yes open it and read it ELSE read from standard input
+my $input;
+
+my @requests = (0);
+
+for (@ARGV) {
+    if (/.fas$/) {
+	open $input, '<', $_;
+    } else {
+        # Separate the numbers if they have dots between them
+	for (split /\.\./, $_) {
+            push @requests, $_;
+	}
+    }
+}
+$input = STDIN unless defined $input;
+# Read in data from STDIN
+while (<$input>) {
+    # Skipp empty lines
+    next if /^$/;
+    # Check if it's an id line
+    if (/>(.*)/) {
+        # Store curent id in $seq_name
+        $seq_name = $1;
+        push @ids, $seq_name;
+    } else {
+        # if not an id check if there is a current id defined else throw an error
+        unless (defined $seq_name) {
+            print "Format error! Check the file!\n";
+            last;
+        }
+        # remove newline characters
+        chomp;
+        # read in sequence and append it to the current sequence
+        $fas_data{$seq_name} .= $_;
+    }    
+}
+#======================OUTPUT================================================================
+for (@ids) {
+    my $id = $_;
+    my $chunk = "";
+    my $count = scalar @requests;
+    my $pair;
+    if ($count % 2 == 0) {
+	$pair = $count / 2;
+    } else {
+	$pair = $count + 1 / 2;
+    }
+    for (1..$pair) {
+	my $start = $requests[$_];
+	if ($_ + 1 > $count) {
+	    $chunk .= substr $fas_data{$id}, $start;
+	} else {
+	    my $stop = $requests[($_ - 1) * 2 + 1];
+	    $chunk .= substr $fas_data{$id}, $start, $stop - $start;
+	}
+    }
+
+    print &to_fasta($_, $chunk);
+}

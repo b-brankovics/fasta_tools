@@ -1,0 +1,65 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to format fasta files to have a single sequence line for each entry
+
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+# Print the sequences to STDOUT
+for (@ids) {
+    print ">$_\n$fas_data{$_}\n";
+}
+
+
+#===SUBROUTINES=================================================================
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}

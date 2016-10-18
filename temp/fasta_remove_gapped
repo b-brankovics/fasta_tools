@@ -1,0 +1,113 @@
+#!/usr/bin/perl -w
+use strict;
+
+#======================DESCRIPTION====================================
+# A tool to removed characters from aligned multi fasta files that contain gaps
+
+
+
+#======================INPUT==========================================
+# Read input data
+# Creates a hash for storing fasta: id (key) to sequence (value)
+my %fas_data;
+# Creates an array to store the sequence order
+my @ids;
+
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+#======================MAIN==========================================
+
+# Mark all the characters by position that have gaps ("-")
+# Store these values in a hash
+my %gapped;
+# Examine each sequence
+for (@ids){
+    # A variable to keep track of the location
+    # the value will be 0 for the first position
+    my $n = -1;
+    # Split the sequence to nucleotides
+    for (split //, $fas_data{$_}){
+	$n++;
+	# Skip if position is already marked
+	next if $gapped{$n};
+	# Mark position if it is a gap
+	$gapped{$n}++ if $_ eq "-";
+    }
+}
+
+# Remove the marked characters from the sequences
+for (@ids){
+    # Store the sequence in variable
+    my $seq = "";
+    my $n = -1;
+    for (split(//, $fas_data{$_})){
+	$n++;
+	# Skip markers that contain gaps
+	$seq .= $_ unless $gapped{$n}
+    }
+    # Print the given sequence
+    print &to_fasta($_, $seq);
+}
+
+# Count the number of characters that have been removed and 
+# print some information to the STDERR
+my $total = scalar keys %gapped;
+print {*STDERR} "Total $total characters are removed\n";
+print {*STDERR} "\t" . join(", ", map {$_ + 1} sort{$a<=>$b} keys %gapped) . "\n";
+
+
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+}

@@ -1,0 +1,90 @@
+#!/usr/bin/perl -w
+
+# A tool for extracting sequence records from a fasta file
+
+#================================================================
+# Format fasta output string
+sub to_fasta {
+        my ($seq_name, $seq, $len) = @_;
+
+	# default to 80 characters of sequence per line
+        $len = 60 unless $len;
+
+        my $formatted_seq = ">$seq_name\n";
+        while (my $chunk = substr($seq, 0, $len, "")) {
+                $formatted_seq .= "$chunk\n";
+        }
+        
+        return $formatted_seq;
+}
+#======================INPUT==========================================
+# Read input data
+# Creates an array for storing fasta: id (key) to sequence (value)
+my %fas_data;
+# Check if a fasta file is given as an argument if yes open it and read it ELSE read from standard input
+my $input;
+
+my @requests;
+
+for (@ARGV) {
+    if (/.fas$/) {open $input, '<', $_} else {push @requests, $_;}
+}
+$input = STDIN unless defined $input;
+# Read in data from STDIN
+while (<$input>) {
+    # Skipp empty lines
+    next if /^$/;
+    # Check if it's an id line
+    if (/>(.*)/) {
+        # Store curent id in $seq_name
+        $seq_name = $1;
+    } else {
+        # if not an id check if there is a current id defined else throw an error
+        unless (defined $seq_name) {
+            print "Format error! Check the file!\n";
+            last;
+        }
+        # remove newline characters
+        chomp;
+        # read in sequence and append it to the current sequence
+        $fas_data{$seq_name} .= $_;
+    }    
+}
+#======================OUTPUT================================================================
+# fragment it to the size specified by the input parameter
+    my $size = $requests[0];
+    # fragments should have some overlap: at least %5
+    my $percent = 5;
+    if ($requests[1]) {$percent = $requests[1];}
+    my $div = int(100/$percent);
+    my $mod = $size % $div;
+#    my $overlap = ($size + $div - $mod) / $div;
+    my $overlap = int($size/100 * $percent);
+   
+    
+for (sort keys %fas_data) {
+    my $id = $_;
+    # see how long the current sequence is
+    my $len = length $fas_data{$_};
+    # if it is small enough then just print it as it is AND go to next sequence
+    if ($len < $size) {print &to_fasta($_, $fas_data{$_});next;}
+    #
+    my $test = int( ($len - $size) / ($size - $overlap)) + 1;
+    my $iter = $test;
+    if ($len > ($size + ($size - $overlap) * ($test -1)) ) {
+        $iter++;
+    }
+    
+    
+    # set initial values
+    my $start = 0;
+    my $increment = $size - $overlap;
+    for (1..$iter) {
+        my $chunk = substr $fas_data{$id}, $start, $size;
+        print &to_fasta($id . "_part$_", $chunk);
+        
+        #increment the value of start
+        $start += $increment;
+    }
+    
+}

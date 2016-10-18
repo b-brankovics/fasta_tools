@@ -1,0 +1,7 @@
+#!/usr/bin/perl -w
+use strict;
+
+for(<>){
+    $_ = "$1\n" if /(>\S+)/;
+    print;
+}

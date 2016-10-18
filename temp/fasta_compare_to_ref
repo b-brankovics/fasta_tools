@@ -1,0 +1,179 @@
+#!/usr/bin/perl -w
+use strict;
+
+# Loads a fasta file with multiple sequences and compares each entry to the reference
+
+
+for (@ARGV) {
+    if ($_ eq "-h" || $_ eq "--help") {
+        print "Usage:\n\tThis programs needs a fasta format input STDIN or file\n\tCompares the first two sequences\n\nOutput: <total length>\t<\# of identical bases>\t<percentage of identity>\t<\# of identical bases, not counting '-'>\t<percentage of identity w/o '-'>\n";
+        die;
+    }
+}
+
+
+die "at least the reference needs to be specified as argumanet" if @ARGV < 1;
+
+my $input;
+my $ref;
+if (@ARGV == 2) {
+    for(@ARGV) {
+	if (/\.(fa)|(fas)|(fasta)|(fsa)|(fna)$/) {
+	    $input = $_;
+	} else {
+	    $ref = $_;
+	}
+    }
+} else {
+    $input = '-';
+    $ref = $ARGV[0];
+}
+
+# Create the necessary variables
+my %fas;
+my @ids;
+
+# Open the files and read the sequences from it
+open(my $fh, $input);
+&read_fasta($fh, \%fas, \@ids);
+close $fh;
+
+
+for (@ids) {
+    next if $_ eq $ref;
+    print $_, ",", &match_cigar($fas{$ref},$fas{$_}), "\n";
+}
+
+
+#===============Subroutines=================================================
+sub match_cigar {
+    my ($ref, $query) = @_;
+    my $rlen = length $ref;
+    my $qlen = length $query;
+    # Store the type of the last comparison: M(atch) I(nsert) D(eletion) E(erronous match)
+    my $prev = "";
+    my $c;
+    my $cigar = "";
+    for (0..(length($ref) - 1)) {
+	my $type;
+        # do the comparison
+        my $r = substr $ref, $_, 1;
+        my $q = substr $query, $_, 1;
+        if ($r eq "-") {
+	    $type = "I" unless $q eq "-";
+	} else {
+	    if ($q eq "-") {
+		$type = "D";
+	    } elsif ($r eq $q) {
+		$type = "M";
+	    } else {
+		$type = "E";
+	    }
+	}
+	if ($type) {
+	    if ($prev) {
+		if ($prev eq $type) {
+		    $c++;
+		} else {
+		    $cigar .= $c;
+		    $cigar .= $prev;
+		    $prev = $type;
+		    $c = 1;
+		} 
+	    } else {
+		$prev = $type;
+		$c = 1;
+	    }
+	}
+    }
+    if ($prev) {
+	$cigar .= $c . $prev;
+    }
+    $cigar; 
+}
+
+sub match_score {
+    my ($seq1, $seq2) = @_;
+    my $len1 = length $seq1;
+    my $len2 = length $seq2;
+    my ($shorter, $longer) = sort {$a<=>$b} ($len1, $len2); 
+    my $corrected = $longer;   # will be equal to length of the alignment when all indel characters are excluded
+    my $score;                 # count the number of identical characters
+    my $score_ungap;           # count number of mismatches (skips indels)
+    for (0..($shorter-1)) {
+        # do the comparison
+        my $base1 = substr $seq1, $_, 1;
+        my $base2 = substr $seq2, $_, 1;
+        if ($base1 eq $base2) {
+            $score++;
+            if ($base1 ne "-") {
+                $score_ungap++;
+            } else {
+                $corrected--;
+            }
+        }# else {print "$_\n"}
+    }
+    "$longer\t$score\t" . (100 * $score/$longer) . "%\t$score_ungap\t" . (100 * $score_ungap/$corrected) ."%\n";
+}
+
+# Format fasta output string
+sub to_fasta {
+    # Create fasta formated string
+	# This subroutine takes two mandatory arguments the first is a string for the sequence name the second is the sequence as a string
+    # The subroutine returns a fasta formated string
+    
+        my ($seq_name, $seq, $len) = @_;
+        unless ($seq_name && $seq) {die "Incorrect usage of &to_fasta:\t it requires at least two inputs\n"}
+
+	# default to 60 characters of sequence per line
+        $len = 60 unless $len;
+
+        my $formatted_seq = ">$seq_name\n";
+        while (my $chunk = substr($seq, 0, $len, "")) {
+                $formatted_seq .= "$chunk\n";
+        }
+        
+        return $formatted_seq;
+}
+
+sub read_fasta {
+    # Convert fasta string into a hash with IDs for keys and sequences as values and stores the original order in an array
+    # This subroutine requieres three arguments:
+	#	1) filehandle for the fasta file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same order as the original file
+	# Warning if there are multiple entries with the same ID they will be concatenated in the order of appearance in the fasta file
+	my ($input, $fas_hash, $fas_array) = @_;
+	my $seq_name;
+	
+	# Correct for line ending confusion, because Mac line endings can crash the program!
+	my $corrected;
+	while (<$input>){
+	# Replace multiple line endings
+		s/\R+/\n/g;
+		$corrected .= $_;
+	}
+	open my $cor, '<', \$corrected;
+    while (<$cor>) {
+		
+        # Skipp empty lines
+        next if /^\s*$/;
+        # Check if it's an ID line
+        if (/>(.*)/) {
+            # Store curent ID in $seq_name
+            $seq_name = $1;
+			push @$fas_array, $seq_name;
+        } else {
+            # If not an id check if there is a current ID defined else throw an error
+            unless (defined $seq_name) {
+                print "Format error in fasta file! First non-empty line has to be an ID line! Check the file!\n";
+                last;
+            }
+            # Remove newline characters
+            s/\R//g;
+            # Read in sequence and append it to the current sequence
+            $fas_hash->{$seq_name} .= $_;
+		}
+	}
+	close $cor;
+}

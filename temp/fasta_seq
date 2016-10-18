@@ -1,0 +1,107 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to extract a part of the sequences from fasta files
+
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# Differentiate between input file and sequence positions 
+my @requests;
+my @input;
+for (@ARGV) {
+    if (/\.fas$/ || /\.fa$/ || /\.fsa$/ || /\.fasta$/) {
+	push @input, $_;
+    } else {
+	# Separate the numbers if they have dots between them
+	for (split /\.\./, $_) {
+	    push @requests, $_;
+	}
+    }
+}
+@ARGV = @input;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+
+for (@ids) {
+    my $id = $_;
+    my $chunk = "";
+    if (scalar @requests % 2 == 0) {
+	my $count = scalar @requests;
+	for (1..($count / 2)) {
+	    my $start = $requests[($_ - 1) * 2];
+	    my $stop = $requests[($_ - 1) * 2 + 1];
+	    $chunk .= substr $fas_data{$id}, $start -1, $stop - $start + 1;
+	}
+    } elsif (scalar @requests == 1) {
+	$chunk .= substr $fas_data{$id}, $requests[0] - 1;
+    } else {
+	die "<@requests>: [" . join("],[", @requests ) . "]\n";
+    }
+
+    print $chunk;
+}
+
+
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}

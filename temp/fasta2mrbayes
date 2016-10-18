@@ -1,0 +1,92 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool convert fasta files to nexus format files for mrbayes with execution block
+
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+# Print the sequences to STDOUT
+&print_mrbayes(\%fas_data, \@ids);
+
+
+
+
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
+sub print_mrbayes {
+    # Print all the sequences to STDOUT
+    my ($hash, $list) = @_;
+    my $count = scalar @$list;
+    my $len = length $hash->{$list->[0]};
+    print "#NEXUS\n\nBEGIN DATA;\n        DIMENSIONS  NTAX=$count NCHAR=$len;\n        FORMAT DATATYPE = DNA GAP = - MISSING = ?;\n        MATRIX\n";
+    for (@$list) {
+	my $name;
+($name) = split / /, $_;
+
+	print "        $name\t", $hash->{$_}, "\n";
+    }
+    print "\n;\n\nEND;\n\nbegin mrbayes;\n        set autoclose=yes nowarn=yes;\n        lset nst=mixed rates=gamma;\n        unlink statefreq=(all) revmat=(all) shape=(all) pinvar=(all);\n        prset applyto=(all) ratepr=variable;\n        mcmcp ngen= 4000000 relburnin=yes burninfrac=0.25  printfreq=400  samplefreq=400 nchains=4 savebrlens=yes;\n        mcmc;\n        sumt;\nend;\n";
+}
