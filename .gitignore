@@ -1,5 +1,3 @@
 ## Specifies files that should not be included
 
 bin/test
-
-sync.sh
