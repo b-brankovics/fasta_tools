@@ -14,48 +14,39 @@ The executable files are located in the [bin](bin) folder.
 
 A tool to reverse complement the entries of FASTA format files.
 
-------------------------------------
 ### [fasta_length](bin/fasta_length)
 
 A tool to get sequence length information for FASTA files.
 
-------------------------------------
 ### [fasta_extract](bin/fasta_extract)
 
 A tool to extract selected entries from a multi FASTA file
 using regular expression(s) to identify entries.
 
-------------------------------------
 ### [fasta_remove](bin/fasta_remove)
 
 A tool to remove selected entries from a multi FASTA file
 using regular expression(s) to identify entries.
 
-
-------------------------------------
 ### [fasta_similarity](bin/fasta_similarity)
 
 A tool to measure sequence similarity of aligned sequences in multi
 FASTA format files.
 
-------------------------------------
 ### [fasta_variability](bin/fasta_variability)
 
 A tool to measure sequence variability of aligned sequences in multi
 FASTA format files.
 
-------------------------------------
 ### [fasta_sub](bin/fasta_sub)
 
 A tool to extract a part of the sequences from FASTA files.
 
-------------------------------------
 ### [fasta_shift](bin/fasta_shift)
 
 A tool to shift circular FASTA sequences using 
 a reference FASTA file or a position.
 
-------------------------------------
 ### [fasta_unique](bin/fasta_unique)
 
 A tool to remove duplicate sequence from FASTA format files and
@@ -65,7 +56,6 @@ Example:
 
      fasta_unique input.fas >unique.fas 2>unique.tab
 
-------------------------------------
 ### [fasta_deunique](bin/fasta_deunique)
 
 A tool to format FASTA file to replace names from duplicate removal
@@ -76,7 +66,6 @@ Example:
      fasta_deunique -i unique.fas -tab unique.tab >deunique.fas
 
 
-------------------------------------
 ### fasta\_pretty
 
 A tool to format FASTA files to uniform column width (60).
@@ -117,7 +106,6 @@ Format and concatenate three FASTA files from the current directory
     fasta_pretty input*.fas >output.fas
     cat input2.fas | fasta_pretty input1.fas - input3.fas >output.fas
 
-----------------------
 ### fasta\_dealign
 
 A tool to format FASTA files to remove gap character states and format
