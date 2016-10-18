@@ -1,0 +1,13 @@
+## Specifies files that should not be included
+# Emacs temp files
+*~
+\#*\#
+.\#*
+
+# Scripts that are not finalised
+/temp/
+
+# Test cases for the scripts and dummy imputs
+/test/
+
+/bin/test
