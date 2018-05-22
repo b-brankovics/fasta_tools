@@ -150,5 +150,21 @@ Format and concatenate three FASTA files from the current directory
     fasta_dealign input*.fas >output.fas
     cat input2.fas | fasta_dealign input1.fas - input3.fas >output.fas
 
+### [fasta_assembly_statistics](bin/fasta_assembly_statistics)
 
+A tool to calulate assembly statistics for FASTA files.
 
+It calculates the following statistics:
+- number of contigs
+- total size (bp)
+- N50 (bp)
+- L50: smallest number of contigs whose length sum produces N50
+- mean contig size (bp)
+- longest contig (bp)
+- third quartile (bp)
+- median (bp)
+- first quartile (bp)
+- shortest contig (bp)
+- number of Ns
+- number of gaps (/N+/): number of N-stretches in the sequences
+- number of other IUPACs: IUPAC bases are nucleotide ambiguity codes (YRWSKMDVHB)

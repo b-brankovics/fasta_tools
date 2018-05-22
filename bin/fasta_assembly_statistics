@@ -1,0 +1,234 @@
+#!/usr/bin/perl -w
+
+use strict;
+
+# POD: Plain Old Documentation block
+=pod
+
+=head3 fasta_assembly_statistics
+
+A tool to calulate assembly statistics for FASTA files.
+
+=head4 Synopsis
+
+    fasta_assembly_statistics [OPTIONS] [FILE]...
+
+=head4 Options
+
+=over 12
+
+=item B<-h> | B<--help>
+
+Print the help message; ignore other arguments.
+
+=back
+
+=head4 Input
+
+STDIN and/or FASTA files.
+The extention of the files is irrelevant.
+
+=head4 Output
+
+A set of statistic data about the assembly file.
+Each entry is assumed to be a contig of the assembly.
+This can be captured in a file by using the C<E<gt>> or C<E<gt>E<gt>> operator.
+
+=head4 Examples
+
+Calculate for a single file (C<input.fas>).
+
+    fasta_assembly_statistics input.fas
+    cat input.fas | fasta_pretty 
+    cat input.fas | fasta_pretty -
+
+=cut
+
+#===DESCRIPTION=================================================================
+
+
+my $description = 
+    "Description:\n\tA tool to calulate assembly statistics for FASTA files.\n";
+my $usage = 
+    "Usage:\n\t$0 [-h | --help] [FASTA file | -]\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\n";
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# Print help if needed
+&print_help(@ARGV);
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+# Get the number of contigs in the assembly
+my $contig_count = scalar keys %fas_data;
+
+# sort the contigs in descending order based on contig size
+my @descending = sort{$b<=>$a} map{length $_} values %fas_data;
+
+# Count Ns, N-streches (gaps) and other iupac values in the sequence
+my $nbases = 0;
+my $gaps = 0;
+my $iupac = 0;
+for (values %fas_data) {
+    my $hits = () = /N/g;
+    $nbases += $hits;
+    my $gaphit = () = /N+/g;
+    $gaps += $gaphit;
+    my $iupachit = () = /[YRWSKMDVHB]/g;
+    $iupac += $iupachit;
+}
+
+# Get the total length of the assembly
+my $total;
+for (@descending) {
+    $total += $_;
+}
+
+# Get the N50 of the assembly
+my $n50;
+my $l50;
+my $accumulator;
+my $half = $total / 2;
+for (@descending) {
+    $accumulator += $_;
+    $l50++;
+    if ($accumulator >= $half) {
+        $n50 = $_;
+        last;
+    }
+}
+
+# Get the mean contig length
+my $mean = $total / $contig_count;
+
+# Get the shortest and longest contig lengths
+my ($min, $max) = (@descending)[-1,0];
+
+# Median and quartiles
+my $median = &median(@descending);
+my @upper;
+my @lower;
+if ($contig_count % 2 == 0) {
+    my $half = $contig_count/2;
+    @upper = splice(@descending, 0, $half);
+    @lower = @descending;
+} else {
+    my $halfint = ($contig_count - 1)/2;
+    @upper = splice(@descending, 0, $halfint);
+    shift(@descending);
+    @lower = @descending;
+}
+
+my $q1 = &median(@lower);
+my $q3 = &median(@upper);
+
+# Q1
+
+# Q3
+
+# Save the data to the return string
+#$print .= "Assembly statistics (in bp):\n";
+print "Number of contigs:\t$contig_count\n";
+print "Total size (bp):\t$total\n";
+print "N50 (bp):\t\t$n50\n";
+print "L50:\t\t\t$l50\n";
+print "Mean contig size (bp):\t$mean\n";
+print "Longest contig (bp):\t$max\n";
+print "Third quartile (bp):\t$q3\n";
+print "Median (bp):\t\t$median\n";
+print "First quartile (bp):\t$q1\n";
+print "Shortest contig (bp):\t$min\n";
+print "Number of Ns:\t\t$nbases\n";
+print "Number of gaps (/N+/):\t$gaps\n";
+print "Number of other IUPACs:\t$iupac\n";
+
+#===SUBROUTINES=================================================================
+
+sub print_help {
+    # Print out the usage to STDERR
+    # Takes in the @ARGV as input
+    my @args = @_;
+    for (@args) {
+	if (/-?-h(elp)?/) {
+	    die "$usage\n$description\n$options";
+	}
+    }
+}
+
+
+sub median {
+    my @data = @_;
+    my $count = scalar @data;
+    if ($count % 2 == 0) {
+	my $a = $data[$count/2];
+	my $b = $data[$count/2 - 1];
+	return ($a + $b) / 2;
+    } else {
+	return $data[($count - 1)/2];
+    }
+}
+
+
+sub read_fasta {
+    # Convert FASTA string into a hash with IDs for keys and sequences
+    #  as values and stores the original order in an array
+    # This subroutine requires three arguments:
+	#	1) filehandle for the FASTA file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same
+	#          order as the original file 
+    # If an ID line is present multiple times then a warning is printed
+    #  to STDERR
+    my ($hash, $list, $file) = @_;
+    # Use STDIN if file is '-'
+    $file = undef if $file && $file eq '-';
+    my $in;
+    if ($file && -e $file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    # Store the sequence id
+    my $seq_id;
+    for (<$in>) {
+        # Remove line endings
+        s/\R//g;
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print {*STDERR} "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error in FASTA file! Check the file!\n";
+		last;
+	    }
+	    # Remove white space
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
