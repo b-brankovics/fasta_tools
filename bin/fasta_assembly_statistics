@@ -138,11 +138,11 @@ if ($contig_count % 2 == 0) {
 # Only calculate quartiles if the set can be split in two
 # Q1
 my $q1 = "NA";
-$q1 = &median(@lower);
+$q1 = &median(@lower) if @lower;
 
 # Q3
 my $q3 = "NA";
-$q3 = &median(@upper);
+$q3 = &median(@upper) if @upper;
 
 
 # Save the data to the return string
