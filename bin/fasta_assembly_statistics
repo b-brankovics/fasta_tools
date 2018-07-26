@@ -135,12 +135,15 @@ if ($contig_count % 2 == 0) {
     @lower = @descending;
 }
 
-my $q1 = &median(@lower);
-my $q3 = &median(@upper);
-
+# Only calculate quartiles if the set can be split in two
 # Q1
+my $q1 = "NA";
+$q1 = &median(@lower);
 
 # Q3
+my $q3 = "NA";
+$q3 = &median(@upper);
+
 
 # Save the data to the return string
 #$print .= "Assembly statistics (in bp):\n";
