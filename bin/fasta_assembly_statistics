@@ -102,15 +102,24 @@ for (@descending) {
 
 # Get the N50 of the assembly
 my $n50;
+my $n90;
 my $l50;
+my $l90;
 my $accumulator;
 my $half = $total / 2;
+my $nine = $total * 0.9;
+my $count;
 for (@descending) {
     $accumulator += $_;
-    $l50++;
-    if ($accumulator >= $half) {
+    $count++;
+    if ($accumulator >= $half && ! $n50) {
         $n50 = $_;
-        last;
+	$l50 = $count;
+    }
+    if ($accumulator >= $nine && ! $n90) {
+	$n90 = $_;
+	$l90 = $count;
+	last;
     }
 }
 
@@ -151,6 +160,8 @@ print "Number of contigs:\t$contig_count\n";
 print "Total size (bp):\t$total\n";
 print "N50 (bp):\t\t$n50\n";
 print "L50:\t\t\t$l50\n";
+print "N90 (bp):\t\t$n90\n";
+print "L90:\t\t\t$l90\n";
 print "Mean contig size (bp):\t$mean\n";
 print "Longest contig (bp):\t$max\n";
 print "Third quartile (bp):\t$q3\n";
