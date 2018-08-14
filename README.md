@@ -48,6 +48,15 @@ A tool to extract a part of the sequences from FASTA files.
 A tool to shift circular FASTA sequences using 
 a reference FASTA file or a position.
 
+### [fasta_find](bin/fasta_find)
+
+A tool to reporting exact sequence matches of entries in a reference
+FASTA file in a target FASTA file.
+
+Example:
+
+    fasta_find gene.fas chr.fas
+
 ### [fasta_unique](bin/fasta_unique)
 
 A tool to remove duplicate sequence from FASTA format files and
@@ -55,7 +64,7 @@ print the groups to STDERR.
 
 Example:
 
-     fasta_unique input.fas >unique.fas 2>unique.tab
+    fasta_unique input.fas >unique.fas 2>unique.tab
 
 ### [fasta_deunique](bin/fasta_deunique)
 

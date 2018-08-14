@@ -1,0 +1,261 @@
+#!/usr/bin/perl -w
+use strict;
+
+# POD: Plain Old Documentation block
+=pod
+
+=head3 fasta_find
+
+A tool to get exact match positions in a target FASTA file based on a reference FASTA file.
+
+=head4 Synopsis
+
+    fasta_find <reference.fas> <target.fas> [OPTIONS]
+
+=head4 Options
+
+=over 12
+
+=item B<-h> | B<--help>
+
+Print the help message
+
+=back
+
+=head4 Input
+
+STDIN and/or FASTA files.
+The extention of the files is irrelevant.
+
+=head4 Output
+
+Per hit the header line of the entry that matched followed by the details of the match.
+The program prints to STDOUT.
+
+=head4 Examples
+
+Find a gene sequnce (C<gene.fas>) in a chromosome sequence (C<chr.fas>).
+
+    fasta_find gene.fas chr.fas
+
+=cut
+
+#===DESCRIPTION=================================================================
+
+my $description = 
+    "Description:\n\tA tool to find exact matches of a reference fasta file in a target fasta file\n";
+my $usage = 
+    "Usage:\n\t$0 [-h | --help] <reference.fas> <target.fas>\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message\n" .
+    "\n";
+
+#===MAIN========================================================================
+
+# Print help if needed
+&print_help(@ARGV);
+my ($file1, $file2) = @ARGV;
+unless ($file1 && $file2) {
+    print {*STDERR} "The program requires exactly two input files\n";
+    &print_help(["-h"]);
+}
+
+#======================INPUT==========================================
+
+
+# Read input data
+# Creates an array for storing fasta: id (key) to sequence (value)
+my %fas_data;
+my @ids;
+
+&read_fasta(\%fas_data, \@ids, $file1);
+my @ids_other;
+my %fas_data_other;
+
+&read_fasta(\%fas_data_other, \@ids_other, $file2);
+
+#======================OUTPUT=========================================
+
+for my $find (@ids) {
+    print "\@hits for $find\n";
+    my $seq = $fas_data{$find};
+    # remove gaps from the query sequence
+    $seq =~ s/-//g;
+    # 
+    $seq =~ uc($seq);
+    my $len = length $seq;
+    my $rev = &reverse_seq($seq);
+    $seq = &iupac2regex($seq);
+    $rev =  &iupac2regex($rev);
+    for my $id(@ids_other){
+	# Keep a string with gapped and ungapped version for the target
+	my $gapped = $fas_data_other{$id};
+	my $ungapped = $gapped;
+	$ungapped =~ s/-//g;
+	my $pos = -1;
+	for ($ungapped =~ /($seq)/g) {
+	    $pos = index($ungapped, $_, $pos + 1);
+	    last if $pos < 0;
+	    # Determine the actual position within the target
+	    my $end = $pos + $len;
+	    my $i = 0;
+	    my $j = 0;
+	    my $n = 0;
+	    for (split //, $gapped) {
+		last if $end == $n;
+		$j++;
+		$i++ unless $pos <= $n;
+		$n++ unless $_ eq "-";
+	    }
+	    # matched the sequence
+	    my $a = 1 + $i;
+	    my $b = $j;
+	    print ">$id\n";
+	    print "matched + $a $b\n";
+	}
+	$pos = -1;
+	for ($ungapped =~ /($rev)/g) {
+	    $pos = index($ungapped, $_, $pos + 1);
+            last if $pos < 0;
+		# matched the reverse complement
+	    # Determine the actual position within the target
+	    my $end = $pos + $len;
+	    my $i = 0;
+	    my $j = 0;
+	    my $n = 0;
+	    for (split //, $gapped) {
+		last if $end == $n;
+		$j++;
+		$i++ unless $pos <= $n;
+		$n++ unless $_ eq "-";
+	    }
+	    # matched the sequence
+	    my $a = 1 + $i;
+	    my $b = $j;
+	    print ">$id\n";
+	    print "matched - $a $b\n";
+	}
+    }
+}
+
+
+#===SUBROUTINES=================================================================
+
+sub print_help {
+    # Print out the usage to STDERR
+    # Takes in the @ARGV as input
+    my @args = @_;
+    for (@args) {
+	if (/-?-h(elp)?/) {
+	    die "$usage\n$description\n$options";
+	}
+    }
+}
+
+sub read_fasta {
+    # Convert FASTA string into a hash with IDs for keys and sequences
+    #  as values and stores the original order in an array
+    # This subroutine requires three arguments:
+	#	1) filehandle for the FASTA file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same
+	#          order as the original file 
+    # If an ID line is present multiple times then a warning is printed
+    #  to STDERR
+    my ($hash, $list, $file) = @_;
+    # Use STDIN if file is '-'
+    $file = undef if $file && $file eq '-';
+    my $in;
+    if ($file && -e $file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    # Store the sequence id
+    my $seq_id;
+    for (<$in>) {
+        # Remove line endings
+        s/\R//g;
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print {*STDERR} "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error in FASTA file! Check the file!\n";
+		last;
+	    }
+	    # Remove white space
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    # Print ID line
+    my $formatted_seq = ">$seq_name\n";
+    # Add sequence lines with $len length
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub print_fasta {
+    # Print all the sequences to STDOUT in FASTA format
+    my ($hash, $list) = @_;
+    for (@$list) {
+	print &to_fasta($_, $hash->{$_});
+    }
+}
+
+sub reverse_seq {
+    # Reverse complements the sequences
+    my ($seq) = @_;
+    # Reverse the sequnce
+    my $complement = reverse $seq;
+    # Complement the sequence
+    $complement =~ tr/ACGTacgtWwMmRrSsKkYyBbVvDdHh/TGCAtgcaWwKkYySsMmRrVvBbHhDd/;
+    return $complement;
+}
+
+sub iupac2regex {
+    # Convert sequence with iupac to regular expression
+    my ($seq) = @_;
+    # IUPAC
+    my %nt = (
+	W => "[AT]",
+	S => "[CG]",
+	M => "[AC]",
+	K => "[GT]",
+	R => "[AG]",
+	Y => "[CT]",
+	B => "[CGT]",
+	D => "[AGT]",
+	H => "[ACT]",
+	V => "[ACG]",
+	N => "[ACGT]",
+	);
+    my $result;
+    for (split //, $seq) {
+	if (defined $nt{$_}) {
+	    $result .= $nt{$_};
+	} else {
+	    $result .= $_;
+	}
+    }
+    return $result;
+}
