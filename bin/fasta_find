@@ -58,7 +58,7 @@ my $options =
 my ($file1, $file2) = @ARGV;
 unless ($file1 && $file2) {
     print {*STDERR} "The program requires exactly two input files\n";
-    &print_help(["-h"]);
+    &print_help("-h");
 }
 
 #======================INPUT==========================================
