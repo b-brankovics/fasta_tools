@@ -129,7 +129,7 @@ sub print_help {
     my @args = @_;
     for (@args) {
 	if (/-?-h(elp)?/) {
-	    pod2usage({-verbose=>3,-exitval=>0}); exit;
+	    pod2usage({-verbose=>2, -noperldoc=>1,-exitval=>0}); exit;
 #	    die "$usage\n$description\n$options";
 	}
     }
