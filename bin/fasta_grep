@@ -1,0 +1,229 @@
+#!/usr/bin/perl -w
+use strict;
+use Pod::Usage;
+
+#===DESCRIPTION=================================================================
+# A tool to sort entries in a multi fasta file
+
+
+#===HELP========================================================================
+
+if (grep{/^--?h(elp)?$/} @ARGV) {
+    pod2usage({-verbose=>2, -output=>\*STDOUT, -noperldoc => 1, -exitval=>0});
+}
+
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+my @requests;
+my $invert;
+
+my @fastas;
+for (@ARGV) {
+    if (/\.fas$/ || /\.fa$/ || /\.fsa$/ || /\.fasta$/ || /^-$/) {
+	push @fastas, $_;
+    } elsif (/^-v$/ || /^--invert-match$/) {
+	$invert++;
+    } else {
+	push @requests, $_;
+    }
+}
+@ARGV = @fastas;
+
+unless (@requests) {
+    print STDERR "ERROR: There was no regex specified\n\n";
+    pod2usage({-verbose => 2, -output => \*STDERR, -exitval => 1, -noperldoc => 1});
+}
+
+
+# If there were files specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+
+# Group IDs into matched or unmatched (nomatch)
+my @match;
+my @nomatch;
+for (@ids) {
+    my $hit;
+    for my $regex (@requests) {
+	if (/$regex/) {
+	    push @match, $_;
+	    $hit++;
+	    last;
+	}
+    }
+    push @nomatch, $_ unless $hit;
+}
+
+# Based on invert specify what to report
+my @get = $invert ? @nomatch : @match;
+# Print the sequences to STDOUT
+&print_fasta(\%fas_data, \@get);
+
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    $file = undef if ($file && $file eq "-");
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    if ($file) {
+	unless (-e $file) {
+	    die "ERROR: no such file '$file'\n";
+	}
+	if (-z $file) {
+	    print STDERR "WARNING: '$file' is empty\n";
+	}
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
+sub print_fasta {
+    # Print all the sequences to STDOUT
+    my ($hash, $list) = @_;
+    for (@$list) {
+	print &to_fasta($_, $hash->{$_});
+    }
+}
+
+##############END OF SCRIPT#########
+
+__END__
+# POD: Plain Old Documentation block
+
+
+=pod
+
+=head3 fasta_grep
+
+This is a script to filter entries from multi FASTA format.
+
+=head4 Synopsis
+
+    fasta_grep ['<regex>'] [-v] [<input.fas>]...
+
+=head4 Options
+
+=over 12
+
+=item B<-h> | B<--help>
+
+Print the help message; ignore other arguments.
+
+=item B<'E<lt>regexE<gt>'>
+
+A Perl style regular expression to be used for filtering.
+To use B</cov=\d+/> for filtering, the following regex arguments can be used: "cov=\d+" | 'cov=\d+' | cov=\\d+
+
+Using single quotes is the most recomended, to avoid bash interpretting special characters before the argument is handed to perl.
+Multiple regular expression can be specified: an entry matching any of these is considered to be matching.
+
+
+=item B<-v> | B<--invert-match>
+
+Invert the sense of matching, to select non-matching entries.
+
+=back
+
+=head4 Input
+
+FASTA format file containing sequences that will be filtered.
+There can be multiple sequence files specified and the script can also read from STDIN.
+If no FASTA files are specified then it will automatically read from STDIN.
+Also if B<-> is included as argument, then STDIN will be read.
+
+Files with the following extensions are recognized as FASTA:
+'*.fas' | '*.fa' | '*.fsa' | '*.fasta'
+
+=head4 Output
+
+FASTA format file is printed to STDOUT after filtering.
+
+=head4 Examples
+
+a) Extract RPB2 entries
+
+    fasta_grep  RPB2  input.fas >output.fas
+    fasta_grep 'RPB2' input.fas >output.fas
+    fasta_grep "RPB2" input.fas >output.fas
+
+b) Filter incomplete sequences out
+
+    fasta_grep -v  incomplete  input.fas >output.fas
+    fasta_grep -v 'incomplete' input.fas >output.fas
+    fasta_grep -v "incomplete" input.fas >output.fas
+
+c) Keep contigs that have at least 10X coverage (cov=<INT>)
+
+    fasta_grep 'cov=\d{2,}'  input.fas >output.fas
+    fasta_grep "cov=\d{2,}"  input.fas >output.fas
+    fasta_grep cov=\\d\{2,\} input.fas >output.fas
+
+d) Extract RPB1 and RPB2 entries
+
+    fasta_grep 'RPB[12]' input.fas >output.fas
+
+e) Filter RPB1 and RPB2 entries from input1.fas input2.fas and input3.fas
+
+    fasta_grep 'RPB[12]' input1.fas input2.fas input3.fas >output.fas
+    cat input1.fas | fasta_grep 'RPB[12]' - input2.fas input3.fas >output.fas
+    cat input2.fas | fasta_grep 'RPB[12]' input1.fas - input3.fas >output.fas
+    cat input3.fas | fasta_grep 'RPB[12]' input1.fas input2.fas - >output.fas
+
+f) Filter RPB1 entries and filtering incomplete entries out (requires two steps)
+
+    cat input1.fas | fasta_grep 'RPB1' | fasta_grep -v 'incomplete' >output.fas
+
+
+=cut

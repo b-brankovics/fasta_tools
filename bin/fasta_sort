@@ -1,0 +1,257 @@
+#!/usr/bin/perl -w
+use strict;
+use Pod::Usage;
+
+#===DESCRIPTION=================================================================
+# A tool to sort entries in a multi fasta file
+
+
+#===HELP========================================================================
+
+if (grep{/^--?h(elp)?$/} @ARGV) {
+    pod2usage({-verbose=>2, -output=>\*STDOUT, -noperldoc=>1, -exitval=>0});
+}
+
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+my @requests;
+my $regex;
+my $rest;
+
+my @fastas;
+for (@ARGV) {
+    if (/\.fas$/ || /\.fa$/ || /\.fsa$/ || /\.fasta$/ || /^-$/) {
+	push @fastas, $_;
+    } elsif (/^--?r(est)?$/) {
+	$rest++;
+    } else {
+	push @requests, $_;
+	$regex = $_;
+    }
+}
+@ARGV = @fastas;
+
+if (@requests > 1) {
+    die ("ERROR: There should be only one regex defiened\n" .
+	 "\tOnly '-' and FASTA files ( '*.fasta' | '*.fas' | '*.fsa' | '*.fa') are recognized as input files\n\n");
+}
+
+
+unless ($regex) {
+    print STDERR "Sorting based on sequence names on an alphanumeric basis\n";
+}
+
+# If there were files specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+
+# Remove selected ids
+my @order;
+if ($regex) {
+    # Make sure there is a capturing parenthesis
+    unless ($regex =~ /\([^)]+\)/) {
+	$regex = "($regex)";
+    }
+    # Get capture part and report to user
+    $regex =~ /\(([^)]+)\)/;
+    my $capture = "($1)";
+    # Split ids based on regex match
+    my @nomatch = grep { $_ !~ /$regex/} @ids;
+    my @match = grep {/$regex/} @ids;
+    # Identify numeric or alphanumeric sort based on the capture hit
+    # Hits and numeric hits should be the same
+    my @hits = map {/$regex/; $1;} @match;
+    my @nums = grep {/^\d+$/} @hits;
+    my $num = scalar(@nums) == scalar(@hits) ? "true" : undef;
+
+    # Report sort type and parameters to the user
+    print STDERR "Regex = /" . $regex . "/; captured part = /" . $capture ."/; Sorting type = ";
+    if ($num) {
+	print STDERR "numeric";
+    } else {
+	print STDERR "alphanumeric";
+    }
+    print STDERR "; Entries that are not matched by /" . $regex . "/ are ";
+    if ($rest) {
+	print STDERR "sorted alphanumerically\n";
+    } else {
+	print STDERR "kept in the same order as in the input\n";
+    }
+
+    # First sort based on capture
+    @order = sort{$a =~ /$regex/; my $hita = $1; $b =~ /$regex/; my $hitb = $1; if ($num) {$hitb <=> $hita} else {$hitb cmp $hita} } @match;
+    # Sort the rest based on basic alphanumeric if needed
+    if ($rest) {
+	push @order, sort @nomatch;
+    } else {
+	push @order, @nomatch;
+    }
+} else {
+    @order = sort @ids;
+}
+
+# Print the sequences to STDOUT
+&print_fasta(\%fas_data, \@order);
+
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    $file = undef if ($file && $file eq "-");
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    if ($file) {
+	unless (-e $file) {
+	    die "ERROR: no such file '$file'\n";
+	}
+	if (-z $file) {
+	    print STDERR "WARNING: '$file' is empty\n";
+	}
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
+sub death {
+    my ($message) = @_;
+    print STDERR $message;
+    pod2usage({-verbose=>2, -output=>\*STDERR, -noperldoc=>1, -exitval=>1});
+}
+
+sub print_fasta {
+    # Print all the sequences to STDOUT
+    my ($hash, $list) = @_;
+    for (@$list) {
+	print &to_fasta($_, $hash->{$_});
+    }
+}
+
+##############END OF SCRIPT#########
+
+__END__
+# POD: Plain Old Documentation block
+
+
+=pod
+
+=head3 fasta_sort
+
+This is a script to sort entries in multi FASTA format.
+
+=head4 Synopsis
+
+    fasta_sort ['<regex>'] [--rest] [<input.fas>]...
+
+=head4 Options
+
+=over 12
+
+=item B<-h> | B<--help>
+
+Print the help message; ignore other arguments.
+
+=item B<'E<lt>regexE<gt>'>
+
+A Perl style regular expression to be used for the sorting.
+To use B</cov=(\d+)/> for sorting the following regex arguments can be used: "cov=(\d+)" | 'cov=(\d+)' | cov=\(\\d+\)
+
+Using single quotes is the most recomended, to avoid bash interpretting special characters before the argument is handed to perl.
+Actual sorting is done on the capture parenthesis (in /cov=B<(\d+)>/ it is '(\d+)'), if no capture parenthesis is included then
+the regex is surrounded by parenthsis (e.g. 'cov=\d+' becomes '(cov=\d+)').
+
+
+=item B<-r> | B<--rest>
+
+The entries that are not matched by the regular expression will be sorted by an alphanumeric sort.
+If it is not used, then entries not matched by the regular expression will be kept in the original order.
+
+=back
+
+=head4 Input
+
+FASTA format file containing sequences that will be sorted. There can be multiple sequence files specified and the script can also read from STDIN.
+If no FASTA files are specified then it will automatically read from STDIN.
+Also if B<-> is included as argument, then STDIN will be read.
+
+=head4 Output
+
+FASTA format file is printed to STDOUT after sorting.
+
+=head4 Examples
+
+a) Sort entries based on /cov=(\d+)/ (coverage value) and entries that are not matched are sorted alphanumerically
+
+    fasta_sort 'cov=(\d+)' --rest input.fas >output.fas
+
+b) Sort entries based on /cov=(\d+)/ (coverage value) and entries that are not matched are kept in the original order
+
+    fasta_sort 'cov=(\d+)' input.fas >output.fas
+
+c) Sort entries based on sequence name alphanumerically
+
+    fasta_sort input.fas >output.fas
+
+d) Sort entries based on sequence name alphanumerically by reading from STDIN
+
+    cat input.fas | fasta_sort >output.fas
+    cat input.fas | fasta_sort - >output.fas
+
+e) Sort entries from input1.fas input2.fas and input3.fas as in b)
+
+    fasta_sort 'cov=(\d+)' input1.fas input2.fas input3.fas >output.fas
+    cat input1.fas | fasta_sort 'cov=(\d+)' - input2.fas input3.fas >output.fas
+    cat input2.fas | fasta_sort 'cov=(\d+)' input1.fas - input3.fas >output.fas
+    cat input3.fas | fasta_sort 'cov=(\d+)' input1.fas input2.fas - >output.fas
+
+=cut

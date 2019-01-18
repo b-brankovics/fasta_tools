@@ -1,60 +1,9 @@
 #!/usr/bin/perl -w
 
 use strict;
-
-# POD: Plain Old Documentation block
-=pod
-
-=head3 fasta_assembly_statistics
-
-A tool to calulate assembly statistics for FASTA files.
-
-=head4 Synopsis
-
-    fasta_assembly_statistics [OPTIONS] [FILE]...
-
-=head4 Options
-
-=over 12
-
-=item B<-h> | B<--help>
-
-Print the help message; ignore other arguments.
-
-=back
-
-=head4 Input
-
-STDIN and/or FASTA files.
-The extention of the files is irrelevant.
-
-=head4 Output
-
-A set of statistic data about the assembly file.
-Each entry is assumed to be a contig of the assembly.
-This can be captured in a file by using the C<E<gt>> or C<E<gt>E<gt>> operator.
-
-=head4 Examples
-
-Calculate for a single file (C<input.fas>).
-
-    fasta_assembly_statistics input.fas
-    cat input.fas | fasta_pretty 
-    cat input.fas | fasta_pretty -
-
-=cut
-
-#===DESCRIPTION=================================================================
+use Pod::Usage;
 
 
-my $description = 
-    "Description:\n\tA tool to calulate assembly statistics for FASTA files.\n";
-my $usage = 
-    "Usage:\n\t$0 [-h | --help] [FASTA file | -]\n";
-my $options = 
-    "Options:\n" .
-    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
-    "\n";
 #===MAIN========================================================================
 
 # Hash to store the sequences: key (id and defintion) and value (sequence) 
@@ -180,7 +129,8 @@ sub print_help {
     my @args = @_;
     for (@args) {
 	if (/-?-h(elp)?/) {
-	    die "$usage\n$description\n$options";
+	    pod2usage({-verbose=>3,-exitval=>0}); exit;
+#	    die "$usage\n$description\n$options";
 	}
     }
 }
@@ -246,3 +196,47 @@ sub read_fasta {
     close $in;
 }
 
+##############END OF SCRIPT#########
+
+__END__
+# POD: Plain Old Documentation block
+=pod
+
+=head3 fasta_assembly_statistics
+
+A tool to calulate assembly statistics for FASTA files.
+
+=head4 Synopsis
+
+    fasta_assembly_statistics [OPTIONS] [FILE]...
+
+=head4 Options
+
+=over 12
+
+=item B<-h> | B<--help>
+
+Print the help message; ignore other arguments.
+
+=back
+
+=head4 Input
+
+STDIN and/or FASTA files.
+The extention of the files is irrelevant.
+
+=head4 Output
+
+A set of statistic data about the assembly file.
+Each entry is assumed to be a contig of the assembly.
+This can be captured in a file by using the C<E<gt>> or C<E<gt>E<gt>> operator.
+
+=head4 Examples
+
+Calculate for a single file (C<input.fas>).
+
+    fasta_assembly_statistics input.fas
+    cat input.fas | fasta_assembly_statistics
+    cat input.fas | fasta_assembly_statistics -
+
+=cut
