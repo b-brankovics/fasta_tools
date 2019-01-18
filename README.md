@@ -25,6 +25,11 @@ A tool to filter entries from a multi FASTA file
 based on entry names using regular expression(s).
 (Replaces `fasta_extract` and `fasta_remove`)
 
+### [fasta_sort](bin/fasta_sort)
+
+A tool to sort entries from a multi FASTA file
+based on entry names using regular expression(s).
+
 ### [fasta_similarity](bin/fasta_similarity)
 
 A tool to measure sequence similarity of aligned sequences in multi
