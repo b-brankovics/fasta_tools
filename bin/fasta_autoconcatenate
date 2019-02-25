@@ -1,0 +1,118 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to concatenate sequences with identical names from fasta files
+
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+my $pos = 0;
+my $count = 0;
+my %seen;
+my $last;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+	$last = $_;
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+    $last = "-";
+}
+&concat_check(\%fas_data, \@ids, $last);
+
+# A sequence maybe listed multiple times in the array
+# So create a new one that is not redundant
+my %ids;
+my @new;
+for (@ids){
+    push @new, $_ unless $ids{$_};
+    $ids{$_}++;
+}
+
+# Print the sequences to STDOUT
+&print_fasta(\%fas_data, \@new);
+
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    push @$list, $seq_id;
+	    if ($seen{$seq_id} && $seen{$seq_id} > $count) {
+		&concat_check($hash, $list, $file);
+	    }
+	    $seen{$seq_id}++;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+}
+
+sub concat_check {
+    # Check that all sequences have the same length and report start and end positions
+    my ($hash, $list) = @_;
+    #    $file = "-" unless $file;
+    $last = "-" unless $last;
+    $count++;
+    my ($first) = values %$hash;
+    my $len = length $first;
+    for my $id (keys %seen) {
+	die "Error: '$id' was seen only $seen{$id} time(s) in the first $count alignment(s)\n" unless $seen{$id} == $count;
+	die "Error: All entries should have equal lengths\n" unless length($hash->{$id}) == $len;
+    }
+    my $start = $pos + 1;
+    $pos = $len;
+    print STDERR join("\t", $count, $last, $start, $pos), "\n";
+}
+
+sub print_fasta {
+    # Print all the sequences to STDOUT
+    my ($hash, $list) = @_;
+    for (@$list) {
+	print &to_fasta($_, $hash->{$_});
+    }
+}
