@@ -22,19 +22,28 @@ my @ids;
 my @requests;
 my $invert;
 
+my $boolean = "and";
+my $min;
+my $max;
 my @fastas;
 for (@ARGV) {
     if (/\.fas$/ || /\.fa$/ || /\.fsa$/ || /\.fasta$/ || /^-$/) {
 	push @fastas, $_;
     } elsif (/^-v$/ || /^--invert-match$/) {
 	$invert++;
+    } elsif (/^--?min=(\d+)$/) {
+	$min = $1;
+    } elsif (/^--?max=(\d+)$/) {
+	$max = $1;
+    } elsif (/^--?or$/i) {
+	$boolean = "or";
     } else {
 	push @requests, $_;
     }
 }
 @ARGV = @fastas;
 
-unless (@requests) {
+unless (@requests || $min || $max ) {
     print STDERR "ERROR: There was no regex specified\n\n";
     pod2usage({-verbose => 2, -output => \*STDERR, -exitval => 1, -noperldoc => 1});
 }
@@ -56,14 +65,42 @@ my @match;
 my @nomatch;
 for (@ids) {
     my $hit;
+    my $minok;
+    my $maxok;
     for my $regex (@requests) {
 	if (/$regex/) {
-	    push @match, $_;
 	    $hit++;
 	    last;
 	}
     }
-    push @nomatch, $_ unless $hit;
+    unless (@requests) {
+	$hit++;
+    }
+
+    if ($min) {
+	if ($min <= length $fas_data{$_}) {
+	    $minok++;
+	}	    
+    } else {
+	$minok++ if $boolean eq "and";
+    }
+    if ($max) {
+	if ($max >= length $fas_data{$_}) {
+	    $maxok++;
+	}
+    } else {
+	$maxok++ if $boolean eq "and";
+    }
+    
+    if (          # Boolean AND
+	($boolean eq "and" && ($hit && $minok && $maxok))
+	    ||    # Boolean OR
+	($boolean eq "or"  && ($hit || $minok || $maxok))
+	) {
+	push @match, $_;
+    } else {
+	push @nomatch, $_;
+    }
 }
 
 # Based on invert specify what to report
@@ -151,7 +188,7 @@ This is a script to filter entries from multi FASTA format.
 
 =head4 Synopsis
 
-    fasta_grep ['<regex>'] [-v] [<input.fas>]...
+    fasta_grep ['<regex>'] [-v] [-min=<INT>] [-max=<INT>] [<input.fas>]...
 
 =head4 Options
 
@@ -160,6 +197,24 @@ This is a script to filter entries from multi FASTA format.
 =item B<-h> | B<--help>
 
 Print the help message; ignore other arguments.
+
+=item B<-min=INT> | B<--min=INT>
+
+Filter out reads that are shorter than INT.
+
+=item B<-max=INT> | B<--max=INT>
+
+Filter out reads that are longer than INT.
+
+=item B<-or> | B<--OR>
+
+There are three filter options: 1. REGEX 2. Minimum length 3. Maximum length
+
+By default, an entry has to pass all specified filters to be considered matching (Boolean AND).
+Using this flag changes this setting so an entry is considered matching if it passes any of the filters (Boolean OR).
+
+In case of multiple regular expressions, if an entry matches any of them, then it passes the REGEX filter.
+If you need an entry to satisfy all regular expressions than combine them by piping multiple calls of this script.
 
 =item B<'E<lt>regexE<gt>'>
 
