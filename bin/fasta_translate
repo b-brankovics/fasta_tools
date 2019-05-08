@@ -159,6 +159,12 @@ sub print_fasta {
 sub translate{
     # Takes string as input, which is the dna sequence
     my ($seq, $id) = @_;
+
+    # Remove masked sequences (hopefully introns)
+    if ($seq =~ s/[a-z]+//g) {
+	print STDERR "WARNING: lower case regions were removed before translation\n";
+    }
+    
     # Split the sequence to triplets
     my @triplet = $seq =~ /.../g;
     my $prot = "";
