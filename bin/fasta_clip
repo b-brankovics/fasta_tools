@@ -1,0 +1,177 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to shift circular fasta files using a reference file or a position
+
+#===MAIN========================================================================
+
+my $ref;
+my $in;
+my $pos;
+my $mode;
+
+
+if (@ARGV != 4) {
+    die "ERROR: not enough arguments:\n" .
+	"USAGE:\n" .
+	"\t$0 -i input.fas -from|-after|-before|-until|-remove ref.fas\n";
+}
+
+my $c=0;
+for (@ARGV) {
+    if (/((-from)|(-after)|(-before)|(-until)|(-remove))/) {$mode = $1; $ref = $ARGV[$c+1]}
+    if (/-i/) {$in = $ARGV[$c+1]}
+    $c++;
+}
+
+# IUPAC                                                                                                                                                                                                
+my %nt = (
+    W => "[AT]",
+    S => "[CG]",
+    M => "[AC]",
+    K => "[GT]",
+    R => "[AG]",
+    Y => "[CT]",
+    B => "[CGT]",
+    D => "[AGT]",
+    H => "[ACT]",
+    V => "[ACG]",
+    N => "[ACGT]",
+    );
+
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+$in = undef if $in eq "-";
+&read_fasta(\%fas_data, \@ids, $in);
+
+
+
+if ($ref) {
+    my %ref_data;
+    my @temp;
+    &read_fasta(\%ref_data, \@temp, $ref);
+    my $match = $ref_data{$temp[0]};
+    # If the reference contains IUPAC nucleotides than replace them with appropriate patterns
+    my $new;
+    for (split //, $match) {
+	if (defined $nt{$_}) {
+	    $new .= $nt{$_};
+	} else {
+	    $new .= $_;
+	}
+    }
+    $match = $new;
+    for (@ids) {
+	if ($fas_data{$_} =~ m/$match/p) {
+	    $fas_data{$_} =~ m/$match/p;
+	    my ($before, $hit, $after) = (${^PREMATCH}, ${^MATCH}, ${^POSTMATCH});
+	    my $out;
+	    if ($mode eq "-before") {
+		$out = $before;
+	    } elsif ($mode eq "-from") {
+		$out = $hit . $after;
+	    } elsif ($mode eq "-until") {
+		$out = $before . $hit;
+	    } elsif ($mode eq "-remove") {
+		$out = $before . $after;
+	    } else { #after
+		$out = $after;
+	    }
+	    print &to_fasta($_, $out);
+	} else {
+	    my @single;
+	    push @single, $_;
+	    &reverse_fasta(\%fas_data, \@single);
+	    if ($fas_data{$_} =~ /$match/) {
+		$fas_data{$_} =~ m/$match/p;
+		my ($before, $hit, $after) = (${^PREMATCH}, ${^MATCH}, ${^POSTMATCH});
+		my $out;
+		if ($mode eq "-before") {
+		    $out = $before;
+		} elsif ($mode eq "-from") {
+		    $out = $hit . $after;
+		} elsif ($mode eq "-until") {
+		    $out = $before . $hit;
+		} else { #after
+		    $out = $after;
+		}
+		print &to_fasta($_, $out);
+	    } else {
+		print STDERR "ERROR: The refernce did not match to $_\n";
+	    }
+	}
+    }
+} else {
+    die "ERROR: not enough arguments:\n" .
+	"USAGE:\n" .
+	"\t$0 -i input.fas -from|-after|-before|-until|-remove ref.fas\n";
+}
+#===SUBROUTINES=================================================================
+
+sub to_fasta {
+    # Return a fasta formated string
+    my ($seq_name, $seq, $len) = @_;
+    # default to 60 characters of sequence per line
+    $len = 60 unless $len;
+    my $formatted_seq = ">$seq_name\n";
+    while (my $chunk = substr($seq, 0, $len, "")) {
+	$formatted_seq .= "$chunk\n";
+    }
+    return $formatted_seq;
+}
+
+sub read_fasta {
+    # This loads the sequences into a hash and an array
+    my ($hash, $list, $file) = @_;
+    my $in;
+    if ($file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    my $seq_id;
+    for (<$in>) {
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error! Check the file!\n";
+		last;
+	    }
+	    # Remove lineendings and white space
+	    s/\R//g;
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
+
+sub reverse_fasta {
+    # Reverse complements the sequences for each entry in the hash
+    # There is no return for this subroutine
+    #   The sequence is manipulated within the hash itself
+    my ($hash, $list) = @_;
+    for (@$list) {
+	# Reverse the sequnce
+	my $complement = reverse $hash->{$_};
+	# Complement the sequence
+	$complement =~ tr/ACGTacgtWwMmRrSsKkYyBbVvDdHh/TGCAtgcaWwKkYySsMmRrVvBbHhDd/;
+	$hash->{$_} = $complement;
+    }
+}
