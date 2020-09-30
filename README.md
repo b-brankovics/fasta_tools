@@ -178,3 +178,31 @@ It calculates the following statistics:
 - number of Ns
 - number of gaps (/N+/): number of N-stretches in the sequences
 - number of other IUPACs: IUPAC bases are nucleotide ambiguity codes (YRWSKMDVHB)
+
+### [fasta_display_alignment](bin/fasta_display_alignment)
+
+
+A tool to display sequence alignments in either pairwise or a multiple alignment fashion.
+
+```
+Usage:
+        fasta_display_alignment [-h | --help] [-w=<int> | --width=<int>] [-p | --pairwise] [FASTA file | -]
+
+Description:
+        A tool to display sequence alignments in either pairwise or a multiple alignment fashion.
+
+Options:
+        -h | --help
+                Print the help message; ignore other arguments.
+        -w=<int> | --width=<int>
+                Set the width of the sequence that will be displayed per line to <int>.
+        -p | --pairwise
+                Display alignments in pairs similarly to an exonerate output.
+                At the start the sequence IDs are printed and some alignment statistics.
+        -b | --block
+                Display alignment in 'block format'. Consensus positions are shown with a '*'.
+                At the start the sequence IDs are printed and at the end some alignment statistics.
+                Each alignment chunck starts by the range displayed and ends with a line with position info.
+                This is the default option.
+
+```

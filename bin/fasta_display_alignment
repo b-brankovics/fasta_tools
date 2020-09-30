@@ -1,0 +1,262 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to measure sequence variability of aligned sequences in multi
+#  FASTA format files 
+
+my $description = 
+    "Description:\n\t" .
+    "A tool to display sequence alignments in either pairwise or a multiple alignment fashion.\n";
+my $usage = 
+    "Usage:\n\t$0 [-h | --help] [-w=<int> | --width=<int>] [-p | --pairwise] [FASTA file | -]\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\t-w=<int> | --width=<int>\n\t\tSet the width of the sequence that will be displayed per line to <int>.\n" .
+    "\t-p | --pairwise\n\t\tDisplay alignments in pairs similarly to an exonerate output.\n" .
+    "\t\tAt the start the sequence IDs are printed and some alignment statistics.\n" .
+    "\t-b | --block\n\t\tDisplay alignment in 'block format'. Consensus positions are shown with a '*'.\n" .
+    "\t\tAt the start the sequence IDs are printed and at the end some alignment statistics.\n" .
+    "\t\tEach alignment chunck starts by the range displayed and ends with a line with position info.\n" .
+    "\t\tThis is the default option.\n" .
+    "\n";
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+#my $pairwise = "yes";
+my $pairwise; 
+#my $width = 80;
+my $width = 100;
+
+my @keep;
+for (@ARGV) {
+    if (/^--?w(?:idth)?=?(\d+)$/) {
+	$width = $1;
+    } elsif (/^--?p(airwise)?$/) {
+	$pairwise = "yes";
+    } elsif (/^--?b(lock)?$/) {
+	$pairwise = undef;
+    } else {
+	push @keep, $_;
+    }
+}
+@ARGV = @keep;
+
+# Print help if needed
+&print_help(@ARGV);
+
+my %unique;
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+# Check that the sequences have the same length
+my $total = length $fas_data{$ids[0]};
+die "ERROR: Not all the sequences have the same length! The sequences are not aligned.\n" if grep{length($fas_data{$_}) != $total} @ids;
+
+if ($pairwise) {
+    for my $i (0..$#ids) {
+	my $id1 = $ids[$i];
+	for my $j (0..$#ids) {
+	    next unless $i < $j;
+	    my $id2 = $ids[$j];
+	    my $seq1 = $fas_data{$id1};
+	    my $seq2 = $fas_data{$id2};
+	    # collect match info and position mapping
+	    my $match;
+	    my $same = 0;
+	    my %p2seq1;
+	    my %p2seq2;
+	    my $p1;
+	    my $p2;
+	    # # no need to show shared gaps in a pairwise setting
+	    # my $new1;
+	    # my $new2;
+	    for my $p (1..$total) {
+		my $base1 = substr($seq1, $p - 1, 1);
+		my $base2 = substr($seq2, $p - 1, 1);
+		if ($base1 ne "-") {
+		    $p1++;
+		}
+		if ($base2 ne "-") {
+		    $p2++;
+		}
+		$p2seq1{$p} = $p1;
+		$p2seq2{$p} = $p2;
+		if ($base1 eq $base2) {
+		    $match .= '|';
+		    $same++;
+		} else {
+		    $match .= ' ';
+		}
+	    }
+	    my $pos = 0;
+	    print "\n" unless $i == 1 && $j == 2;
+	    print "A: $id1\n";
+	    print "B: $id2\n";
+	    my $sim = sprintf("%.2f", 100 * $same / $total);
+	    my $sim1 = sprintf("%.2f", 100 * $same / $p1);
+	    my $sim2 = sprintf("%.2f", 100 * $same / $p2);
+	    print "Alignment: $total; Identical: $same; Similarity: $sim\%; A: $p1 ($sim1\%); B: $p2 ($sim2\%)\n";
+	    print "\n";
+	    while ($seq1) {
+		my $w = $width;
+		if (length $seq1 < $w) {
+		    $w = length $seq1;
+		}
+		my $top = substr($seq1, 0, $w, '');
+		my $mid = substr($match, 0, $w, '');
+		my $bottom = substr($seq2, 0, $w, '');
+		my $len = length $top;
+		my $from = $pos + 1;
+		my $to = $pos + $len;
+		printf "%8s %s %8s\n", $p2seq1{$from}, $top, $p2seq1{$to};
+		printf "%8s %s %8s\n", $from, $mid, $to;
+		printf "%8s %s %8s\n", $p2seq2{$from}, $bottom, $p2seq2{$to};
+		#	    print "" , $p2seq1{$from} , "\t$top " , $p2seq1{$pos + $len}, "\n";
+		#	    print "" , ($from) , "\t$mid " , ($to), "\n";
+		#	    print "" , $p2seq2{$from} , "\t$bottom " , $p2seq2{$to}, "\n";
+		print "\n";
+		$pos += $len;
+	    }
+	    print "-" x ($width + 20), "\n";
+	}
+    }
+} else {
+    # print in block and add a consensus line with stars
+    my $match;
+    my $decimal;
+    my $same = 0;
+    my %len;
+    for my $p (1..$total) {
+	if ($p % 10) {
+	    $decimal .= $p % 10;
+	} else {
+	    $decimal .= '^';
+	}
+	my %char;
+	for my $id (@ids) {
+	    my $base = substr($fas_data{$id}, $p - 1, 1);
+	    $char{$base}++;
+	    $len{$id}++ unless $base eq "-";
+	}
+	if (1 == scalar keys %char) {
+	    $match .= '*';
+	    $same++;
+	} else {
+	    $match .= ' ';
+	}
+    }
+    my %map;
+    my $n;
+    my $last = scalar @ids;
+    my $max = length $last;
+    # Header
+    for my $id (@ids) {
+	$n++;
+	$map{$id} = sprintf 'S%0' . $max . 'd', $n;
+	print $map{$id}, ": $id\n";
+    }
+    print "\n";
+    my $pos = 0;
+    while ($pos < $total) {
+	my $w = $width;
+	if ($total - $pos < $w) {
+	    $w = $total - $pos;
+	}
+	my $from = $pos + 1;
+	my $to = $pos + $w;
+	$pos += $w;
+	print "range: $from..$to\n";
+	for my $id (@ids) {
+	    print $map{$id}, " ", substr($fas_data{$id}, 0, $w, ''), "\n";
+	}
+	print " " x ($max + 2), substr($match, 0, $w, ''), "\n";
+	print " " x ($max + 2), substr($decimal, 0, $w, ''), "\n";
+	print "\n";
+    }
+    # Print some statistics
+    my $sim = sprintf("%.2f", 100 * $same / $total);
+    print "Alignemnt:\t$total\nIdententical:\t$same\nSimilarity:\t$sim\%\n";
+    for my $id (@ids) {
+	print $map{$id}, " length: ", $len{$id}, " (", sprintf("%.2f", 100 * $same / $len{$id}) ,")\n";
+    }
+    
+}
+    
+#===SUBROUTINES=================================================================
+
+sub print_help {
+    # Print out the usage to STDERR
+    # Takes in the @ARGV as input
+    my @args = @_;
+    for (@args) {
+	if (/-?-h(elp)?/) {
+	    die "$usage\n$description\n$options";
+	}
+    }
+}
+
+sub read_fasta {
+    # Convert FASTA string into a hash with IDs for keys and sequences
+    #  as values and stores the original order in an array
+    # This subroutine requires three arguments:
+	#	1) filehandle for the FASTA file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same
+	#          order as the original file 
+    # If an ID line is present multiple times then a warning is printed
+    #  to STDERR
+    my ($hash, $list, $file) = @_;
+    # Use STDIN if file is '-'
+    $file = undef if $file && $file eq '-';
+    my $in;
+    if ($file && -e $file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    # Store the sequence id
+    my $seq_id;
+    for (<$in>) {
+        # Remove line endings
+        s/\R//g;
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    $seq_id =~ /^(\S+)/;
+	    my $short = $1;
+	    die "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    print "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    print "WARNING: <$short> is not a unique ID\n" if $unique{$short};
+	    $unique{$short}++;
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error in FASTA file! Check the file!\n";
+		last;
+	    }
+	    # Remove white space
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
