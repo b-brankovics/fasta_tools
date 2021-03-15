@@ -45,7 +45,13 @@ for (@ARGV) {
 
 # Get the sequence group data from the table file
 my %multi;
-open(my $tab, '<', $list);
+my $tab;
+if ($list eq "-") {
+    print STDERR "Reading tab info from STDIN\n";
+    $tab = *STDIN;
+} else {
+    open($tab, '<', $list);
+}
 for (<$tab>) {
     s/\R//g;
     next if /^\s*$/;
@@ -97,8 +103,12 @@ sub read_fasta {
     # Use STDIN if file is '-'
     $file = undef if $file && $file eq '-';
     my $in;
-    if ($file && -e $file) {
-	open $in, '<', $file || die $!;
+    if ($file) {
+	if ( -e $file) {
+	    open $in, '<', $file || die $!;
+	} else {
+	    die "ERROR: there is no '$file' file\n";
+	}
     } else {
 	$in = *STDIN;
     }

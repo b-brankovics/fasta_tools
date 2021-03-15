@@ -25,9 +25,10 @@ my $invert;
 my $boolean = "and";
 my $min;
 my $max;
+my $tabfile;
 my @fastas;
 for (@ARGV) {
-    if (/\.fas$/ || /\.fa$/ || /\.fsa$/ || /\.fasta$/ || /^-$/) {
+    if (/\.fas$/ || /\.f[nas]?a$/ || /\.fasta$/ || /^-$/) {
 	push @fastas, $_;
     } elsif (/^-v$/ || /^--invert-match$/) {
 	$invert++;
@@ -35,6 +36,10 @@ for (@ARGV) {
 	$min = $1;
     } elsif (/^--?max=(\d+)$/) {
 	$max = $1;
+    } elsif (/^--?tab=(.+)$/) {
+	$tabfile = $1;
+	$tabfile =~ s/^~/$ENV{"HOME"}/;
+#	print STDERR "tabfile '$tabfile'\n";
     } elsif (/^--?or$/i) {
 	$boolean = "or";
     } else {
@@ -43,7 +48,7 @@ for (@ARGV) {
 }
 @ARGV = @fastas;
 
-unless (@requests || $min || $max ) {
+unless (@requests || $min || $max || $tabfile) {
     print STDERR "ERROR: There was no regex specified\n\n";
     pod2usage({-verbose => 2, -output => \*STDERR, -exitval => 1, -noperldoc => 1});
 }
@@ -59,6 +64,28 @@ if (@ARGV) {
     &read_fasta(\%fas_data, \@ids);
 }
 
+my %tags;
+if ($tabfile) {
+    my $intab;
+    if ($tabfile eq "-") {
+	# print STDERR "Reading from STDIN\n";
+	$intab = *STDIN;
+    } else {
+	open($intab, '<', $tabfile) || die $!;
+    }
+    for (<$intab>) {
+	s/\R+//;
+	if (/^$/) {
+	    print STDERR "WARNING: skipping empty lines in the tabfile (line #$.)\n";
+	    next;
+	}
+	my ($id, $tag) = split/\t/;
+	#    print STDERR "$id -> $tag\n";
+	push @requests, $id;
+	$tags{$id} = $tag;
+    }
+    close $intab;
+}
 
 # Group IDs into matched or unmatched (nomatch)
 my @match;
@@ -106,7 +133,7 @@ for (@ids) {
 # Based on invert specify what to report
 my @get = $invert ? @nomatch : @match;
 # Print the sequences to STDOUT
-&print_fasta(\%fas_data, \@get);
+&print_fasta(\%fas_data, \@get, \%tags);
 
 #===SUBROUTINES=================================================================
 
@@ -144,11 +171,12 @@ sub read_fasta {
     for (<$in>) {
 	# Skip empty lines
 	next if /^\s*$/;
+	s/\R+//g;
 	# Check wheter it is an id line
 	if (/>(.*)/) {
 	    # Save the id and the definition and store it in the array
 	    $seq_id = $1;
-	    print STDERR "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    print STDERR "WARNING: <" . $seq_id . "> is present in multiple copies\n" if $hash->{$seq_id};
 	    push @$list, $seq_id;
 	} else {
 	    # If there was no id lines before this then throw an error
@@ -168,9 +196,25 @@ sub read_fasta {
 
 sub print_fasta {
     # Print all the sequences to STDOUT
-    my ($hash, $list) = @_;
+    my ($hash, $list, $tag) = @_;
     for (@$list) {
-	print &to_fasta($_, $hash->{$_});
+	# /^(\S+)/;
+	my $id = $_;
+	for my $regex (keys %$tag) {
+	    next unless $tag->{$regex};
+	    if ($id =~ /$regex/) {
+		# my $t = $tag->{$regex};
+		# $id =~ s/($regex)/$1 $t/;
+		$id .= " " . $tag->{$regex};
+	    }
+	}
+	# if ($tag->{$id}) {
+	# #    print STDERR "Tag: $_ -> " . $tag->{$id} . "\n";
+	#     $id = $_ . " " . $tag->{$id};
+	# } else {
+	#     $id = $_;
+	# }
+	print &to_fasta($id, $hash->{$_});
     }
 }
 
@@ -228,6 +272,11 @@ Multiple regular expression can be specified: an entry matching any of these is 
 =item B<-v> | B<--invert-match>
 
 Invert the sense of matching, to select non-matching entries.
+
+=item B<-tab=FILE> | B<--tab=FILE>
+
+Reads the search patterns from the file. It splits the lines by tabs and
+uses the first part as pattern and the second one to add as tag when printing the output.
 
 =back
 
