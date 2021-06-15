@@ -14,6 +14,8 @@ my $usage =
 my $options = 
     "Options:\n" .
     "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\t-t=<output> | --triple=<output>\n" .
+    "\t-t <output> | --triple <output>\n\t\tPrint grouping information as tab-separeted triples to <output> file.\n" .
     "\n";
 #===MAIN========================================================================
 
@@ -21,6 +23,30 @@ my $options =
 my %fas_data;
 # Array to store the order of the sequences
 my @ids;
+
+my $triples;
+my @mem;
+my $iter = 0;
+my $skip;
+for (@ARGV) {
+    if (/^--?t(riple)?$/) {
+	my $x = $iter + 1;
+	open($triples, '>', $ARGV[$x]) || die $!;
+	#$triples = $ARGV[$x];
+	$skip = $x;
+    } elsif ($skip && $skip == $iter) {
+	next;
+    } elsif (/^--?t(?:riple)?=(.+)$/) {
+	open($triples, '>', $1) || die $!;
+	#$triples = $1;
+    } else {
+	push @mem, $_;
+    }
+    $iter++;
+}
+@ARGV = @mem;
+
+#print STDERR "triples file = $triples >@ARGV<\n";
 
 # Print help if needed
 &print_help(@ARGV);
@@ -74,6 +100,18 @@ for my $id (@unique) {
     print &to_fasta($def, $fas_data{$id});
     if ($c > 1) {
 	print {*STDERR} "$def\t$group{$id}\n";
+    }
+}
+
+#print STDERR "Create triple file ($triples)\n";
+
+if ($triples) {
+    #print STDERR "Create triple file\n";
+    #open(my $triplefh, '>', $triples) || die $1;
+    for my $uni (@unique) {
+	for (split/,/, $group{$uni}) {
+	    print {$triples} "uniq:$uni\thas\t$_\n";
+	}
     }
 }
 
