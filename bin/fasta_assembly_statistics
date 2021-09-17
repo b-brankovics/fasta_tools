@@ -11,116 +11,179 @@ my %fas_data;
 # Array to store the order of the sequences
 my @ids;
 
+my $file_report;
+my @mem;
+for (@ARGV) {
+    if (/^--?r(eport)?$/) {
+	$file_report++;
+    } else {
+	push @mem, $_;
+    }
+}
+@ARGV = @mem;
+
+if ($file_report) {
+    unless (@ARGV) {
+	die "ERROR: the impput files have to be specified for report mode.\n"
+    }
+}
+
 # Print help if needed
 &print_help(@ARGV);
 
 # If there were arguments specified then read the sequence from them
 # OR read from STDIN
+my %files;
 if (@ARGV) {
     for (@ARGV) {
 	&read_fasta(\%fas_data, \@ids, $_);
+	if ($file_report) {
+	    # store per file name
+	    my %copy = %fas_data;
+	    my @copy = @ids;
+	    $files{$_}->{'fas_data'} = \%copy;
+	    $files{$_}->{'ids'} = \@copy;
+#	    print STDERR "f<$_>: @ids\n";
+#	    print STDERR "\t" . join("\n\t", @{ $files{$_}->{'ids'} }), "\n";
+	    # reset general
+	    %fas_data = ();
+	    @ids = ();
+	}
     }
 } else {
     &read_fasta(\%fas_data, \@ids);
 }
 
-# Get the number of contigs in the assembly
-my $contig_count = scalar keys %fas_data;
-
-# sort the contigs in descending order based on contig size
-my @descending = sort{$b<=>$a} map{length $_} values %fas_data;
-
-# Count Ns, N-streches (gaps) and other iupac values in the sequence
-my $nbases = 0;
-my $gaps = 0;
-my $iupac = 0;
-for (values %fas_data) {
-    my $hits = () = /N/g;
-    $nbases += $hits;
-    my $gaphit = () = /N+/g;
-    $gaps += $gaphit;
-    my $iupachit = () = /[YRWSKMDVHB]/g;
-    $iupac += $iupachit;
+for (keys %files) {
+#    print STDERR "f<$_>:" . join("\n\t", @{ $files{$_}->{'ids'} }), "\n";
+}
+unless ($file_report) {
+    # create same structure for non-report mode
+    $files{'-'}->{'fas_data'} = \%fas_data;
+    $files{'-'}->{'ids'} = \@ids;
 }
 
-# Get the total length of the assembly
-my $total;
-for (@descending) {
-    $total += $_;
-}
+for my $file (sort keys %files) {
+#    print STDERR "f<$file>: @ids\n";
+#    print STDERR "\t" . join("\n\t", @{ $files{$file}->{'ids'} }), "\n";
+    %fas_data = %{ $files{$file}->{'fas_data'} };
+    @ids = @{ $files{$file}->{'ids'} };
 
-# Get the N50 of the assembly
-my $n50;
-my $n90;
-my $l50;
-my $l90;
-my $accumulator;
-my $half = $total / 2;
-my $nine = $total * 0.9;
-my $count;
-for (@descending) {
-    $accumulator += $_;
-    $count++;
-    if ($accumulator >= $half && ! $n50) {
-        $n50 = $_;
-	$l50 = $count;
+#    print STDERR "f<$file>: @ids\n";
+    # Get the number of contigs in the assembly
+    my $contig_count = scalar keys %fas_data;
+    
+    # sort the contigs in descending order based on contig size
+    my @descending = sort{$b<=>$a} map{length $_} values %fas_data;
+    
+    # Count Ns, N-streches (gaps) and other iupac values in the sequence
+    my $nbases = 0;
+    my $gaps = 0;
+    my $iupac = 0;
+    for (values %fas_data) {
+	my $hits = () = /N/g;
+	$nbases += $hits;
+	my $gaphit = () = /N+/g;
+	$gaps += $gaphit;
+	my $iupachit = () = /[YRWSKMDVHB]/g;
+	$iupac += $iupachit;
     }
-    if ($accumulator >= $nine && ! $n90) {
-	$n90 = $_;
-	$l90 = $count;
-	last;
+    
+    # Get the total length of the assembly
+    my $total;
+    for (@descending) {
+	$total += $_;
+    }
+    
+    # Get the N50 of the assembly
+    my $n50;
+    my $n90;
+    my $l50;
+    my $l90;
+    my $accumulator;
+    my $half = $total / 2;
+    my $nine = $total * 0.9;
+    my $count;
+    for (@descending) {
+	$accumulator += $_;
+	$count++;
+	if ($accumulator >= $half && ! $n50) {
+	    $n50 = $_;
+	    $l50 = $count;
+	}
+	if ($accumulator >= $nine && ! $n90) {
+	    $n90 = $_;
+	    $l90 = $count;
+	    last;
+	}
+    }
+    
+    # Get the mean contig length
+    my $mean = $total / $contig_count;
+    
+    # Get the shortest and longest contig lengths
+    my ($min, $max) = (@descending)[-1,0];
+    
+    # Median and quartiles
+    my $median = &median(@descending);
+    my @upper;
+    my @lower;
+    if ($contig_count % 2 == 0) {
+	my $half = $contig_count/2;
+	@upper = splice(@descending, 0, $half);
+	@lower = @descending;
+    } else {
+	my $halfint = ($contig_count - 1)/2;
+	@upper = splice(@descending, 0, $halfint);
+	shift(@descending);
+	@lower = @descending;
+    }
+    
+    # Only calculate quartiles if the set can be split in two
+    # Q1
+    my $q1 = "NA";
+    $q1 = &median(@lower) if @lower;
+    
+    # Q3
+    my $q3 = "NA";
+    $q3 = &median(@upper) if @upper;
+    
+    if ($file_report) {
+	print join("\t", $file, "Number of contigs", $contig_count), "\n";
+	print join("\t", $file, "Total size (bp)", $total), "\n";
+	print join("\t", $file, "N50 (bp)", $n50), "\n";
+	print join("\t", $file, "L50", $l50), "\n";
+	print join("\t", $file, "N90 (bp)", $n90), "\n";
+	print join("\t", $file, "L90", $l90), "\n";
+	print join("\t", $file, "Mean contig size (bp)", $mean), "\n";
+	print join("\t", $file, "Longest contig (bp)", $max), "\n";
+	print join("\t", $file, "Third quartile (bp)", $q3), "\n";
+	print join("\t", $file, "Median (bp)", $median), "\n";
+	print join("\t", $file, "First quartile (bp)", $q1), "\n";
+	print join("\t", $file, "Shortest contig (bp)", $min), "\n";
+	print join("\t", $file, "Number of Ns", $nbases), "\n";
+	print join("\t", $file, "Number of gaps (/N+/)", $gaps), "\n";
+	print join("\t", $file, "Number of other IUPACs", $iupac), "\n";
+    } else {
+	# Save the data to the return string
+	#$print .= "Assembly statistics (in bp):\n";
+	print "Number of contigs:\t$contig_count\n";
+	print "Total size (bp):\t$total\n";
+	print "N50 (bp):\t\t$n50\n";
+	print "L50:\t\t\t$l50\n";
+	print "N90 (bp):\t\t$n90\n";
+	print "L90:\t\t\t$l90\n";
+	print "Mean contig size (bp):\t$mean\n";
+	print "Longest contig (bp):\t$max\n";
+	print "Third quartile (bp):\t$q3\n";
+	print "Median (bp):\t\t$median\n";
+	print "First quartile (bp):\t$q1\n";
+	print "Shortest contig (bp):\t$min\n";
+	print "Number of Ns:\t\t$nbases\n";
+	print "Number of gaps (/N+/):\t$gaps\n";
+	print "Number of other IUPACs:\t$iupac\n";
     }
 }
-
-# Get the mean contig length
-my $mean = $total / $contig_count;
-
-# Get the shortest and longest contig lengths
-my ($min, $max) = (@descending)[-1,0];
-
-# Median and quartiles
-my $median = &median(@descending);
-my @upper;
-my @lower;
-if ($contig_count % 2 == 0) {
-    my $half = $contig_count/2;
-    @upper = splice(@descending, 0, $half);
-    @lower = @descending;
-} else {
-    my $halfint = ($contig_count - 1)/2;
-    @upper = splice(@descending, 0, $halfint);
-    shift(@descending);
-    @lower = @descending;
-}
-
-# Only calculate quartiles if the set can be split in two
-# Q1
-my $q1 = "NA";
-$q1 = &median(@lower) if @lower;
-
-# Q3
-my $q3 = "NA";
-$q3 = &median(@upper) if @upper;
-
-
-# Save the data to the return string
-#$print .= "Assembly statistics (in bp):\n";
-print "Number of contigs:\t$contig_count\n";
-print "Total size (bp):\t$total\n";
-print "N50 (bp):\t\t$n50\n";
-print "L50:\t\t\t$l50\n";
-print "N90 (bp):\t\t$n90\n";
-print "L90:\t\t\t$l90\n";
-print "Mean contig size (bp):\t$mean\n";
-print "Longest contig (bp):\t$max\n";
-print "Third quartile (bp):\t$q3\n";
-print "Median (bp):\t\t$median\n";
-print "First quartile (bp):\t$q1\n";
-print "Shortest contig (bp):\t$min\n";
-print "Number of Ns:\t\t$nbases\n";
-print "Number of gaps (/N+/):\t$gaps\n";
-print "Number of other IUPACs:\t$iupac\n";
-
 #===SUBROUTINES=================================================================
 
 sub print_help {
@@ -213,6 +276,12 @@ A tool to calulate assembly statistics for FASTA files.
 =head4 Options
 
 =over 12
+
+=item B<-r> | B<--report>
+
+Generate report for each file specified as input.
+The output format is a tab delimited (tsv) file
+with file name, key, value.
 
 =item B<-h> | B<--help>
 
