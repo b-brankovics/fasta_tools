@@ -1,0 +1,193 @@
+#!/usr/bin/perl -w
+use strict;
+
+#===DESCRIPTION=================================================================
+# A tool to measure sequence variability of aligned sequences in multi
+#  FASTA format files 
+
+my $description = 
+    "Description:\n\t" .
+    "A tool to calculate sequence distances of aligned sequences\n" .
+    "\tin multi FASTA format files. Default output is a 3 column TSV\n" .
+    "\tspecifting the two sequence IDs and their distances.\n";
+my $usage = 
+    "Usage:\n\t$0 [options] [FASTA file | -]\n";
+my $options = 
+    "Options:\n" .
+    "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\t-t | --tsv\n\t\tChange output to TSV (NxN) table.\n" .
+    "\t-c | --csv\n\t\tChange output to CSV (NxN) table.\n" .
+    "\t-p | --phyl | --phylip\n\t\tChange output to phylip format distance matrix.\n" .
+    "\t-s | --sim | --similarity\n\t\tPrint sequence similarity instead of distances (in the desired format).\n" .
+    "\n";
+#===MAIN========================================================================
+
+# Hash to store the sequences: key (id and defintion) and value (sequence) 
+my %fas_data;
+# Array to store the order of the sequences
+my @ids;
+
+# Parse input parameters
+my $table;
+my $similarity;
+my $phyl;
+my $csv;
+
+my @keep;
+for (@ARGV) {
+    if (/^--?c(sv)?$/) {
+	$csv++;
+	die "ERROR: more than one output option selected.\n" . "$usage\n$description\n$options" if ($phyl || $table);
+    } elsif (/^--?p((hyl)|(hylip))?$/) {
+	$phyl++;
+	die "ERROR: more than one output option selected.\n" . "$usage\n$description\n$options" if ($table || $csv);
+    } elsif (/^--?t((able)|(sv))?$/) {
+	$table++;
+	die "ERROR: more than one output option selected.\n" . "$usage\n$description\n$options" if ($phyl || $csv);
+    } elsif (/^--?s((im)|(imilarity))?$/) {
+	$similarity++;
+    } else {
+	push @keep, $_;
+    }
+}	
+@ARGV = @keep;
+
+# Print help if needed
+&print_help(@ARGV);
+
+# If there were arguments specified then read the sequence from them
+# OR read from STDIN
+if (@ARGV) {
+    for (@ARGV) {
+	&read_fasta(\%fas_data, \@ids, $_);
+    }
+} else {
+    &read_fasta(\%fas_data, \@ids);
+}
+
+
+# Check that the sequences have the same length
+my $total = length $fas_data{$ids[0]};
+die "ERROR: Not all the sequences have the same length! The sequences are not aligned.\n" if grep{length($fas_data{$_}) != $total} @ids;
+
+my $dist = {};
+
+for my $a (@ids) {
+    for my $b (@ids) {
+	my $diff;
+	if ($a eq $b) {
+	    $diff = 0;
+	} elsif ($a gt $b) {
+	    next;
+	} else {
+	    my $len = 0;
+	    my $var = 0;  # Number of variable characters
+	    for my $p (1..$total) {
+		$p--;
+		# Store all the character states and their count in a hash
+		my %char;
+		for my $id ($a, $b) {
+		    $char{substr($fas_data{$id}, $p, 1)}++;
+		}
+		# More than one chracter state => variable
+		if (scalar(keys %char) > 1) {
+		    $var++;
+		    $len++;
+		} elsif (! $char{"-"}) {
+		    $len++;
+		}
+	    }
+	    $diff = $var / $len;
+	}
+	# Convert difference to similarity if needed
+	$diff = 1 - $diff if $similarity;
+	$dist->{$a}->{$b} = $diff;
+	$dist->{$b}->{$a} = $diff;
+    }
+}
+
+# Print output (default is a 3 column format)
+my $sep = "\t";
+if ($csv) {
+    $sep = ",";
+    $table++;
+}
+
+# Print proper header when needed
+if ($phyl) {
+    print "  ", scalar(@ids), "\n";
+    $table++;
+} elsif ($table) {
+    print join($sep, "", @ids), "\n";
+}
+
+# Print body
+for my $a (@ids) {
+    print $a if $table;
+    for my $b (@ids) {
+	print $a . $sep . $b unless $table;
+	print $sep . $dist->{$a}->{$b};
+	print "\n" unless $table;
+    }
+    print "\n" if $table;
+}
+
+#===SUBROUTINES=================================================================
+
+sub print_help {
+    # Print out the usage to STDERR
+    # Takes in the @ARGV as input
+    my @args = @_;
+    for (@args) {
+	if (/-?-h(elp)?/) {
+	    die "$usage\n$description\n$options";
+	}
+    }
+}
+
+sub read_fasta {
+    # Convert FASTA string into a hash with IDs for keys and sequences
+    #  as values and stores the original order in an array
+    # This subroutine requires three arguments:
+	#	1) filehandle for the FASTA file
+	#	2) a hash reference to store the sequences in
+	#	3) an array reference to store the IDs in the same
+	#          order as the original file 
+    # If an ID line is present multiple times then a warning is printed
+    #  to STDERR
+    my ($hash, $list, $file) = @_;
+    # Use STDIN if file is '-'
+    $file = undef if $file && $file eq '-';
+    my $in;
+    if ($file && -e $file) {
+	open $in, '<', $file || die $!;
+    } else {
+	$in = *STDIN;
+    }
+    # Store the sequence id
+    my $seq_id;
+    for (<$in>) {
+        # Remove line endings
+        s/\R//g;
+	# Skip empty lines
+	next if /^\s*$/;
+	# Check wheter it is an id line
+	if (/>(.*)/) {
+	    # Save the id and the definition and store it in the array
+	    $seq_id = $1;
+	    print {*STDERR} "WARNING: <$seq_id> is present in multiple copies\n" if $hash->{$seq_id};
+	    push @$list, $seq_id;
+	} else {
+	    # If there was no id lines before this then throw an error
+	    unless (defined $seq_id) {
+		print "Format error in FASTA file! Check the file!\n";
+		last;
+	    }
+	    # Remove white space
+	    s/\s+//g;
+	    # Add to the sequence
+	    $hash->{$seq_id} .= $_;
+	}
+    }
+    close $in;
+}
