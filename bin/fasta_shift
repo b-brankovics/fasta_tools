@@ -30,12 +30,6 @@ my %fas_data;
 # Array to store the order of the sequences
 my @ids;
 
-# If there were arguments specified then read the sequence from them
-# OR read from STDIN
-if (@ARGV != 4) {
-    die "ERROR: incorrect number of arguments:\n" . $usage;
-}
-
 # Parse the arguments
 my $ref; # reference file
 my $in;  # input fasta file
@@ -54,8 +48,19 @@ for (@ARGV) {
     }
     $c++;
 }
-# Print warning if input and the reference are the same source
-die "ERROR: The reference and the input are the same!\n$usage" if $in eq $ref;
+# Die if input and the reference are the same source
+die "ERROR: The reference and the input are the same!\n$usage" if ($ref && $in && $in eq $ref);
+
+# Die if both reference and position are specified
+die "ERROR: Both reference and position are set, but they are exclusive!\n$usage" if ($ref && defined $pos);
+
+# Die if both reference and position are specified
+die "ERROR: Either reference or position need to be specified!\n$usage" unless ($ref || defined $pos);
+
+# OR read from STDIN
+if (@ARGV != 4) {
+    die "ERROR: incorrect number of arguments:\n" . $usage;
+}
 
 # If there were arguments specified then read the sequence from them
 # OR read from STDIN
