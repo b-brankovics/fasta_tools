@@ -61,6 +61,8 @@ my $usage =
 my $options = 
     "Options:\n" .
     "\t-h | --help\n\t\tPrint the help message; ignore other arguments.\n" .
+    "\t-s | --single\n\t\tPrint the sequence on a single line.\n" .
+    "\t-w=<int> | --width<int>\n\t\tPrint the sequence using <int> width.\n" .
     "\n";
 #===MAIN========================================================================
 
@@ -72,18 +74,30 @@ my @ids;
 # Print help if needed
 &print_help(@ARGV);
 
+my $width = 60;
+my @keep;
+for (@ARGV) {
+    if (/^--?s(ingle)?$/) {
+	$width = undef;
+    } elsif (/--?w(?:idth)?=(\d+)$/) {
+	$width = $1;
+    } else {
+	push @keep, $_;
+    }
+}
+@ARGV = @keep;
 # If there were arguments specified then read the sequence from them
 # OR read from STDIN
 if (@ARGV) {
-    for (@ARGV) {
-	&read_fasta(\%fas_data, \@ids, $_);
-    }
+    &read_fasta(\%fas_data, \@ids, $_);
 } else {
     &read_fasta(\%fas_data, \@ids);
 }
 
+#print STDERR "Width: $width\n";
+
 # Print the sequences to STDOUT
-&print_fasta(\%fas_data, \@ids);
+&print_fasta(\%fas_data, \@ids, $width);
 
 #===SUBROUTINES=================================================================
 
@@ -148,21 +162,25 @@ sub read_fasta {
 sub to_fasta {
     # Return a fasta formated string
     my ($seq_name, $seq, $len) = @_;
-    # default to 60 characters of sequence per line
-    $len = 60 unless $len;
+    # # default to 60 characters of sequence per line
+    # $len = 60 unless $len;
     # Print ID line
     my $formatted_seq = ">$seq_name\n";
     # Add sequence lines with $len length
-    while (my $chunk = substr($seq, 0, $len, "")) {
-	$formatted_seq .= "$chunk\n";
+    if ($len) {
+	while (my $chunk = substr($seq, 0, $len, "")) {
+	    $formatted_seq .= "$chunk\n";
+	}
+    } else {
+	$formatted_seq .= "$seq\n";
     }
     return $formatted_seq;
 }
 
 sub print_fasta {
     # Print all the sequences to STDOUT in FASTA format
-    my ($hash, $list) = @_;
+    my ($hash, $list, $width) = @_;
     for (@$list) {
-	print &to_fasta($_, $hash->{$_});
+	print &to_fasta($_, $hash->{$_}, $width);
     }
 }
