@@ -83,7 +83,8 @@ for my $find (@ids) {
     # remove gaps from the query sequence
     $seq =~ s/-//g;
     # 
-    $seq =~ uc($seq);
+    $seq = uc($seq);
+    my ($t) = split/\s/, $find;
     my $len = length $seq;
     my $rev = &reverse_seq($seq);
     $seq = &iupac2regex($seq);
@@ -91,9 +92,10 @@ for my $find (@ids) {
     for my $id(@ids_other){
 	# Keep a string with gapped and ungapped version for the target
 	my $gapped = $fas_data_other{$id};
-	my $ungapped = $gapped;
+	my $ungapped = uc($gapped);
 	$ungapped =~ s/-//g;
 	my $pos = -1;
+	my ($short) = split/\s/, $id;
 	for ($ungapped =~ /($seq)/g) {
 	    $pos = index($ungapped, $_, $pos + 1);
 	    last if $pos < 0;
@@ -113,6 +115,7 @@ for my $find (@ids) {
 	    my $b = $j;
 	    print ">$id\n";
 	    print "matched + $a $b\n";
+	    print {*STDERR} join("\t", $short, 'fasta_find', 'nucleotide_match', $a, $b, '.', '+', '.', "Target=$t 1 $len;Gap=M$len\n");
 	}
 	$pos = -1;
 	for ($ungapped =~ /($rev)/g) {
@@ -135,6 +138,7 @@ for my $find (@ids) {
 	    my $b = $j;
 	    print ">$id\n";
 	    print "matched - $a $b\n";
+	    print {*STDERR} join("\t", $short, 'fasta_find', 'nucleotide_match', $a, $b, '.', '-', '.', "Target=$t 1 $len;Gap=M$len\n");
 	}
     }
 }
