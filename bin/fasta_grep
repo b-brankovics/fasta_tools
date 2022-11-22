@@ -26,6 +26,7 @@ my $boolean = "and";
 my $min;
 my $max;
 my $tabfile;
+my $exact;
 my @fastas;
 for (@ARGV) {
     if (/\.fas$/ || /\.f[nas]?a$/ || /\.fasta$/ || /^-$/) {
@@ -42,6 +43,8 @@ for (@ARGV) {
 #	print STDERR "tabfile '$tabfile'\n";
     } elsif (/^--?or$/i) {
 	$boolean = "or";
+    } elsif (/^--?e(xact(-id)?)?$/i) {
+	$exact++;
     } else {
 	push @requests, $_;
     }
@@ -96,6 +99,8 @@ for (@ids) {
     my $maxok;
     for my $regex (@requests) {
 	if (/$regex/) {
+	    # If exact is used than ID has to match
+	    next if ($exact && $_ !~ /^$regex\b/);
 	    $hit++;
 	    last;
 	}
@@ -277,6 +282,11 @@ Invert the sense of matching, to select non-matching entries.
 
 Reads the search patterns from the file. It splits the lines by tabs and
 uses the first part as pattern and the second one to add as tag when printing the output.
+
+=item B<-e> | B<--exact-id>
+
+The pattern has to match the ID part of the def line in the FASTA.
+The same as using '/^>$regex\b/' on the def line.
 
 =back
 
