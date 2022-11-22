@@ -99,6 +99,7 @@ for my $find (@ids) {
     $seq =~ s/-//g;
     # 
     $seq = uc($seq);
+    # $t - target ID
     my ($t) = split/\s/, $find;
     my $len = length $seq;
     my $rev = &reverse_seq($seq);
