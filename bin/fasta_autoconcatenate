@@ -1,8 +1,15 @@
 #!/usr/bin/perl -w
 use strict;
+use Pod::Usage;
 
 #===DESCRIPTION=================================================================
 # A tool to concatenate sequences with identical names from fasta files
+
+#===HELP========================================================================
+
+if (grep{/^--?h(elp)?$/} @ARGV) {
+    pod2usage({-verbose=>2, -output=>\*STDOUT, -noperldoc => 1, -exitval=>0});
+}
 
 #===MAIN========================================================================
 
@@ -15,6 +22,18 @@ my $pos = 0;
 my $count = 0;
 my %seen;
 my $last;
+
+# Check for options
+my $grab_regex = '>(.*)';
+my @input;
+for (@ARGV) {
+    if (/^--?r(?:egex)?=(.*)$/) {
+	$grab_regex = $1;
+    } else {
+	push @input, $_;
+    }
+}
+@ARGV = @input;
 
 # If there were arguments specified then read the sequence from them
 # OR read from STDIN
@@ -68,8 +87,9 @@ sub read_fasta {
     for (<$in>) {
 	# Skip empty lines
 	next if /^\s*$/;
-	# Check wheter it is an id line
-	if (/>(.*)/) {
+	# Check wheter it is an id line #split
+	# default: $grab_regex = '>(.*)';
+	if (/$grab_regex/) {
 	    # Save the id and the definition and store it in the array
 	    $seq_id = $1;
 	    push @$list, $seq_id;
@@ -116,3 +136,72 @@ sub print_fasta {
 	print &to_fasta($_, $hash->{$_});
     }
 }
+
+##############END OF SCRIPT#########
+
+__END__
+# POD: Plain Old Documentation block
+
+
+=pod
+
+=head3 fasta_autoconcatenate
+
+A tool to concatenate sequences with identical names from FASTA files.
+The script checks that all sequences are equally long per input file.
+The concatenated sequence is printed to STDOUT, the script also prints
+to STDERR a report on the different regions originating from different
+files.
+
+=head4 SYNOPSIS
+
+    fasta_autoconcatenate [OPTIONS] [<input.fas>]...
+
+=head4 OPTIONS
+
+=over 4
+
+=item B<-h> | B<--help>
+
+Print this help message; ignore other arguments.
+
+=item B<-r=REGEX> | B<--regex=REGEX>
+
+Specify the regular expression to capture the ID that is consistent for all files.
+Default is '^>(\S+)' which captures the "first word".
+
+=back
+
+=head4 Examples
+
+a) Concatenate 3 gene alignments where the ID lines look like this: '>{strain} {gene}'
+
+    fasta_autoconcatenate geneA.fas geneB.fas geneC.fas >concat.fas 2>concat.tsv
+
+The concat.tsv file look like this:
+
+    1    geneA.fas   1       669
+    2    geneB.fas   670     1938
+    3    geneC.fas   1939    2760
+
+b) Concatenate 3 gene alignments from STDIN where the ID lines look like this: '>{strain} {gene}'
+
+    cat gene*.fas | fasta_autoconcatenate >concat.fas 2>concat.tsv
+
+The concat.tsv file look like this:
+
+    1    -    1       669
+    2    -    670     1938
+    3    -    1939    2760
+
+c) Concatenate 3 gene alignments where the ID lines look like this: '>{strain}|{gene}'
+
+    fasta_autoconcatenate -r='^>([^\|]*)' geneA.fas geneB.fas geneC.fas >concat.fas 2>concat.tsv
+
+The concat.tsv file look like this:
+
+    1    geneA.fas   1       669
+    2    geneB.fas   670     1938
+    3    geneC.fas   1939    2760
+
+=cut
