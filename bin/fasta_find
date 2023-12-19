@@ -55,10 +55,25 @@ my $options =
 
 # Print help if needed
 &print_help(@ARGV);
+
+my $skip;
+my @keep;
+for (@ARGV) {
+    if (/^--?no-iupac$/ || /--?ni$/) {
+	$skip++;
+    } else {
+	push @keep, $_;
+    }
+}
+@ARGV = @keep;
 my ($file1, $file2) = @ARGV;
 unless ($file1 && $file2) {
     print {*STDERR} "The program requires exactly two input files\n";
     &print_help("-h");
+}
+
+if ($skip) {
+    print STDERR "Not using IUPAC encoding\n";
 }
 
 #======================INPUT==========================================
@@ -84,11 +99,12 @@ for my $find (@ids) {
     $seq =~ s/-//g;
     # 
     $seq = uc($seq);
+    # $t - target ID
     my ($t) = split/\s/, $find;
     my $len = length $seq;
     my $rev = &reverse_seq($seq);
-    $seq = &iupac2regex($seq);
-    $rev =  &iupac2regex($rev);
+    $seq = &iupac2regex($seq) unless $skip;
+    $rev =  &iupac2regex($rev) unless $skip;
     for my $id(@ids_other){
 	# Keep a string with gapped and ungapped version for the target
 	my $gapped = $fas_data_other{$id};
