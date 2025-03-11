@@ -1,0 +1,20 @@
+package:
+  name: fasta_tools
+  version: "1.0.1"
+
+source:
+  path: ..
+
+requirements:
+  run:
+    - perl
+
+about:
+  home: https://github.com/b-brankovics/fasta_tools
+  license: MIT
+  summary: 'This package contains Perl programs/scripts that perform frequently needed operations on FASTA format files.'
+  description: |
+    This package contains Perl programs/scripts that perform frequently needed
+    operations on FASTA format files. Such as adjusting the line length to a
+    uniform length, reverse complementing sequences, identifying entries with
+    identical sequences, etc.
